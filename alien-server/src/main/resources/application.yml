@@ -1,0 +1,28 @@
+server:
+  # Só a máquina do dev: a API aceita caminhos de repositórios locais.
+  address: 127.0.0.1
+  port: 8080
+
+spring:
+  application:
+    name: alien-server
+
+alien:
+  toca:
+    image: alien/toca:0.1
+    network: alien-net
+    agent-port: 4096
+    agent-username: opencode
+    memory: 6GB
+    cpus: 4
+    pids-limit: 512
+    ttl: 60m
+    ready-timeout: 60s
+    reap-interval: 60s
+  workspace:
+    allowed-roots:
+      - ${user.home}
+
+logging:
+  level:
+    dev.aliencode: INFO
