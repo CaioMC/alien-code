@@ -11,10 +11,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
-import dev.aliencode.core.toca.domain.Toca;
-import dev.aliencode.core.toca.port.ManagedSandbox;
-import dev.aliencode.core.toca.port.SandboxPort;
-import dev.aliencode.core.toca.port.TocaRepository;
+import dev.aliencode.core.toca.domain.model.Toca;
+import dev.aliencode.core.toca.port.repository.TocaRepository;
+import dev.aliencode.core.toca.port.sandbox.ManagedSandbox;
+import dev.aliencode.core.toca.port.sandbox.SandboxPort;
 import dev.aliencode.core.toca.usecase.DisposeTocaUseCase;
 import dev.aliencode.core.toca.usecase.ReapTocasUseCase;
 

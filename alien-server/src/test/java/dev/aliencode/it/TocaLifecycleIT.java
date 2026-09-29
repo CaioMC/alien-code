@@ -35,11 +35,11 @@ import com.github.dockerjava.api.model.Capability;
 import com.github.dockerjava.api.model.ExposedPort;
 import com.github.dockerjava.api.model.Ports;
 
-import dev.aliencode.adapters.toca.web.dto.TocaView;
-import dev.aliencode.core.toca.domain.TocaId;
-import dev.aliencode.core.toca.port.ExecResult;
-import dev.aliencode.core.toca.port.SandboxPort;
-import dev.aliencode.core.toca.port.SandboxRequest;
+import dev.aliencode.adapters.toca.web.response.TocaResponse;
+import dev.aliencode.core.toca.domain.model.TocaId;
+import dev.aliencode.core.toca.port.sandbox.ExecResult;
+import dev.aliencode.core.toca.port.sandbox.SandboxPort;
+import dev.aliencode.core.toca.port.sandbox.SandboxRequest;
 import dev.aliencode.core.toca.usecase.ReapTocasUseCase;
 
 /**
@@ -88,12 +88,12 @@ class TocaLifecycleIT {
     void criaSemeiaIsolaEDestroiUmaTocaComRepositorioExistente() throws Exception {
         Path repo = gitRepository("demo");
 
-        ResponseEntity<TocaView> response = this.rest.postForEntity("/api/tocas", Map.of("missionId", "m-it",
+        ResponseEntity<TocaResponse> response = this.rest.postForEntity("/api/tocas", Map.of("missionId", "m-it",
                 "seed", Map.of("type", "existing", "repositories", List.of(Map.of("path", repo.toString())))),
-                TocaView.class);
+                TocaResponse.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
-        TocaView toca = response.getBody();
+        TocaResponse toca = response.getBody();
         this.created.add(toca.id());
         assertThat(toca.status()).isEqualTo("READY");
         assertThat(toca.workspace()).containsExactly("/workspace/demo");
@@ -101,12 +101,12 @@ class TocaLifecycleIT {
         String containerId = this.docker.inspectContainerCmd(toca.id()).exec().getId();
 
         // semeadura: conteúdo, dono (usuário alien), bit de execução e git sem remote
-        assertThat(exec(containerId, "cat", "/workspace/demo/README.md").stdout()).isEqualTo("olá, Toca");
-        assertThat(exec(containerId, "stat", "-c", "%u", "/workspace/demo/README.md").stdout().strip()).isEqualTo("1000");
-        assertThat(exec(containerId, "test", "-x", "/workspace/demo/build.sh").succeeded()).isTrue();
-        assertThat(exec(containerId, "git", "-C", "/workspace/demo", "log", "--format=%s").stdout().strip())
+        assertThat(this.exec(containerId, "cat", "/workspace/demo/README.md").stdout()).isEqualTo("olá, Toca");
+        assertThat(this.exec(containerId, "stat", "-c", "%u", "/workspace/demo/README.md").stdout().strip()).isEqualTo("1000");
+        assertThat(this.exec(containerId, "test", "-x", "/workspace/demo/build.sh").succeeded()).isTrue();
+        assertThat(this.exec(containerId, "git", "-C", "/workspace/demo", "log", "--format=%s").stdout().strip())
                 .isEqualTo("primeiro commit");
-        assertThat(exec(containerId, "git", "-C", "/workspace/demo", "remote").stdout()).isBlank();
+        assertThat(this.exec(containerId, "git", "-C", "/workspace/demo", "remote").stdout()).isBlank();
 
         // isolamento e limites
         InspectContainerResponse inspect = this.docker.inspectContainerCmd(containerId).exec();
@@ -128,19 +128,19 @@ class TocaLifecycleIT {
 
         // descarte
         this.rest.delete("/api/tocas/" + toca.id());
-        assertThat(this.rest.getForObject("/api/tocas/" + toca.id(), TocaView.class).status()).isEqualTo("DISPOSED");
+        assertThat(this.rest.getForObject("/api/tocas/" + toca.id(), TocaResponse.class).status()).isEqualTo("DISPOSED");
         assertThatThrownBy(() -> this.docker.inspectContainerCmd(containerId).exec()).isInstanceOf(NotFoundException.class);
     }
 
     @Test
     void criaProjetoNovo() {
-        TocaView toca = this.rest.postForObject("/api/tocas",
-                Map.of("seed", Map.of("type", "new", "name", "novo")), TocaView.class);
+        TocaResponse toca = this.rest.postForObject("/api/tocas",
+                Map.of("seed", Map.of("type", "new", "name", "novo")), TocaResponse.class);
         this.created.add(toca.id());
 
         assertThat(toca.status()).isEqualTo("READY");
         String containerId = this.docker.inspectContainerCmd(toca.id()).exec().getId();
-        assertThat(exec(containerId, "test", "-d", "/workspace/novo/.git").succeeded()).isTrue();
+        assertThat(this.exec(containerId, "test", "-d", "/workspace/novo/.git").succeeded()).isTrue();
     }
 
     @Test

@@ -20,14 +20,14 @@ import dev.aliencode.core.toca.application.TocaTestDoubles.FakeHarness;
 import dev.aliencode.core.toca.application.TocaTestDoubles.FakeSandbox;
 import dev.aliencode.core.toca.application.TocaTestDoubles.FakeSnapshots;
 import dev.aliencode.core.toca.application.TocaTestDoubles.InMemoryTocas;
-import dev.aliencode.core.toca.domain.RepositorySeed;
-import dev.aliencode.core.toca.domain.Seed;
-import dev.aliencode.core.toca.domain.Toca;
-import dev.aliencode.core.toca.domain.TocaProvisioningException;
-import dev.aliencode.core.toca.domain.TocaStatus;
-import dev.aliencode.core.toca.port.ExecResult;
-import dev.aliencode.core.toca.port.SandboxRequest;
-import dev.aliencode.core.toca.usecase.ProvisionTocaCommand;
+import dev.aliencode.core.toca.domain.exception.TocaProvisioningException;
+import dev.aliencode.core.toca.domain.model.RepositorySeed;
+import dev.aliencode.core.toca.domain.model.Seed;
+import dev.aliencode.core.toca.domain.model.Toca;
+import dev.aliencode.core.toca.domain.model.TocaStatus;
+import dev.aliencode.core.toca.port.sandbox.ExecResult;
+import dev.aliencode.core.toca.port.sandbox.SandboxRequest;
+import dev.aliencode.core.toca.usecase.command.ProvisionTocaCommand;
 
 class ProvisionTocaServiceTest {
 
@@ -56,7 +56,7 @@ class ProvisionTocaServiceTest {
 
     @Test
     void semeiaCadaRepositorioEEsperaOOpencode() throws IOException {
-        Seed seed = new Seed.ExistingRepositories(List.of(repo("api"), repo("web")));
+        Seed seed = new Seed.ExistingRepositories(List.of(this.repo("api"), this.repo("web")));
 
         Toca toca = this.service.provision(new ProvisionTocaCommand("m-42", seed));
 
@@ -71,7 +71,7 @@ class ProvisionTocaServiceTest {
 
     @Test
     void criaOContainerComLimitesSenhaERotulos() throws IOException {
-        this.service.provision(new ProvisionTocaCommand("m-42", new Seed.ExistingRepositories(List.of(repo("api")))));
+        this.service.provision(new ProvisionTocaCommand("m-42", new Seed.ExistingRepositories(List.of(this.repo("api")))));
 
         SandboxRequest request = this.sandbox.created.getFirst();
         assertThat(request.image()).isEqualTo("alien/toca:0.1");
@@ -93,7 +93,7 @@ class ProvisionTocaServiceTest {
     @Test
     void falhaDoOpencodeRemoveOContainerEMarcaFailed() throws IOException {
         this.harness.ready = false;
-        Seed seed = new Seed.ExistingRepositories(List.of(repo("api")));
+        Seed seed = new Seed.ExistingRepositories(List.of(this.repo("api")));
 
         assertThatThrownBy(() -> this.service.provision(new ProvisionTocaCommand(null, seed)))
                 .isInstanceOfSatisfying(TocaProvisioningException.class, e -> {
@@ -110,7 +110,7 @@ class ProvisionTocaServiceTest {
         this.sandbox.failOnCopy = new IllegalStateException("disco cheio");
 
         assertThatThrownBy(() -> this.service.provision(
-                new ProvisionTocaCommand(null, new Seed.ExistingRepositories(List.of(repo("api"))))))
+                new ProvisionTocaCommand(null, new Seed.ExistingRepositories(List.of(this.repo("api"))))))
                 .isInstanceOf(TocaProvisioningException.class);
         assertThat(this.snapshots.discarded).hasSize(1);
         assertThat(this.sandbox.removed).hasSize(1);

@@ -17,21 +17,21 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
-import dev.aliencode.core.toca.domain.RepositorySeed;
-import dev.aliencode.core.toca.domain.Seed;
-import dev.aliencode.core.toca.domain.Toca;
-import dev.aliencode.core.toca.domain.TocaEndpoint;
-import dev.aliencode.core.toca.domain.TocaId;
-import dev.aliencode.core.toca.domain.TocaProvisioningException;
-import dev.aliencode.core.toca.port.AgentHarnessPort;
-import dev.aliencode.core.toca.port.ExecResult;
-import dev.aliencode.core.toca.port.SandboxHandle;
-import dev.aliencode.core.toca.port.SandboxPort;
-import dev.aliencode.core.toca.port.SandboxRequest;
-import dev.aliencode.core.toca.port.TocaRepository;
-import dev.aliencode.core.toca.port.WorkspaceSnapshotPort;
-import dev.aliencode.core.toca.usecase.ProvisionTocaCommand;
+import dev.aliencode.core.toca.domain.exception.TocaProvisioningException;
+import dev.aliencode.core.toca.domain.model.RepositorySeed;
+import dev.aliencode.core.toca.domain.model.Seed;
+import dev.aliencode.core.toca.domain.model.Toca;
+import dev.aliencode.core.toca.domain.model.TocaEndpoint;
+import dev.aliencode.core.toca.domain.model.TocaId;
+import dev.aliencode.core.toca.port.harness.AgentHarnessPort;
+import dev.aliencode.core.toca.port.repository.TocaRepository;
+import dev.aliencode.core.toca.port.sandbox.ExecResult;
+import dev.aliencode.core.toca.port.sandbox.SandboxHandle;
+import dev.aliencode.core.toca.port.sandbox.SandboxPort;
+import dev.aliencode.core.toca.port.sandbox.SandboxRequest;
+import dev.aliencode.core.toca.port.workspace.WorkspaceSnapshotPort;
 import dev.aliencode.core.toca.usecase.ProvisionTocaUseCase;
+import dev.aliencode.core.toca.usecase.command.ProvisionTocaCommand;
 
 /**
  * Passos 1 a 3 do ciclo de vida da Toca (especificação, seção 5):
@@ -69,7 +69,7 @@ public class ProvisionTocaService implements ProvisionTocaUseCase {
 
     @Override
     public Toca provision(ProvisionTocaCommand command) {
-        validateSeed(command.seed());
+        this.validateSeed(command.seed());
 
         Instant now = this.clock.instant();
         Toca toca = Toca.provisioning(TocaId.newId(), command.missionId(), now, now.plus(this.settings.ttl()));
@@ -77,15 +77,15 @@ public class ProvisionTocaService implements ProvisionTocaUseCase {
         log.info("Provisionando {} (missão {})", toca.id(), command.missionId());
 
         try {
-            String password = newPassword();
-            SandboxHandle handle = this.sandbox.create(sandboxRequest(toca, password));
+            String password = this.newPassword();
+            SandboxHandle handle = this.sandbox.create(this.sandboxRequest(toca, password));
             TocaEndpoint endpoint = new TocaEndpoint(
                     URI.create("http://" + handle.agentHost() + ":" + handle.agentPort()),
                     this.settings.agentUsername(), password);
             toca = toca.withContainer(handle.containerId(), endpoint);
             this.tocas.save(toca);
 
-            List<String> dirs = seed(toca, command.seed());
+            List<String> dirs = this.seed(toca, command.seed());
             String version = this.harness.awaitReady(endpoint, this.settings.readyTimeout());
 
             toca = toca.ready(dirs);
@@ -95,7 +95,7 @@ public class ProvisionTocaService implements ProvisionTocaUseCase {
         } catch (RuntimeException e) {
             Toca failed = toca.failed(e.getMessage());
             if (failed.hasContainer()) {
-                removeQuietly(failed.containerId());
+                this.removeQuietly(failed.containerId());
             }
             this.tocas.save(failed);
             log.warn("Falha ao provisionar {}: {}", failed.id(), e.getMessage());
@@ -135,8 +135,8 @@ public class ProvisionTocaService implements ProvisionTocaUseCase {
 
     private List<String> seed(Toca toca, Seed seed) {
         return switch (seed) {
-            case Seed.ExistingRepositories existing -> seedRepositories(toca, existing.repositories());
-            case Seed.NewProject project -> seedNewProject(toca, project.name());
+            case Seed.ExistingRepositories existing -> this.seedRepositories(toca, existing.repositories());
+            case Seed.NewProject project -> this.seedNewProject(toca, project.name());
         };
     }
 

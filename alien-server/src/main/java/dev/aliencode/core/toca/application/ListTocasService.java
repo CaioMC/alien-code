@@ -5,10 +5,10 @@ import java.util.List;
 
 import org.springframework.stereotype.Service;
 
-import dev.aliencode.core.toca.domain.Toca;
-import dev.aliencode.core.toca.domain.TocaId;
-import dev.aliencode.core.toca.domain.TocaNotFoundException;
-import dev.aliencode.core.toca.port.TocaRepository;
+import dev.aliencode.core.toca.domain.exception.TocaNotFoundException;
+import dev.aliencode.core.toca.domain.model.Toca;
+import dev.aliencode.core.toca.domain.model.TocaId;
+import dev.aliencode.core.toca.port.repository.TocaRepository;
 import dev.aliencode.core.toca.usecase.ListTocasUseCase;
 
 @Service

@@ -19,8 +19,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 
-import dev.aliencode.core.toca.domain.TocaEndpoint;
-import dev.aliencode.core.toca.port.HarnessNotReadyException;
+import dev.aliencode.core.toca.domain.model.TocaEndpoint;
+import dev.aliencode.core.toca.port.harness.HarnessNotReadyException;
 
 class OpencodeHealthAdapterTest {
 
@@ -49,7 +49,7 @@ class OpencodeHealthAdapterTest {
     void esperaAteOOpencodeFicarSaudavel() {
         this.unhealthyCalls = 3;
 
-        String version = this.adapter.awaitReady(endpoint("s3nha"), Duration.ofSeconds(5));
+        String version = this.adapter.awaitReady(this.endpoint("s3nha"), Duration.ofSeconds(5));
 
         assertThat(version).isEqualTo("1.18.33");
         assertThat(this.calls.get()).isEqualTo(4);
@@ -57,7 +57,7 @@ class OpencodeHealthAdapterTest {
 
     @Test
     void senhaErradaEsgotaOTempoInformandoOStatus() {
-        assertThatThrownBy(() -> this.adapter.awaitReady(endpoint("errada"), Duration.ofMillis(600)))
+        assertThatThrownBy(() -> this.adapter.awaitReady(this.endpoint("errada"), Duration.ofMillis(600)))
                 .isInstanceOf(HarnessNotReadyException.class)
                 .hasMessageContaining("HTTP 401");
     }
@@ -66,7 +66,7 @@ class OpencodeHealthAdapterTest {
     void servidorForaDoArEsgotaOTempo() {
         this.server.stop(0);
 
-        assertThatThrownBy(() -> this.adapter.awaitReady(endpoint("s3nha"), Duration.ofMillis(600)))
+        assertThatThrownBy(() -> this.adapter.awaitReady(this.endpoint("s3nha"), Duration.ofMillis(600)))
                 .isInstanceOf(HarnessNotReadyException.class)
                 .hasMessageContaining("não respondeu");
     }

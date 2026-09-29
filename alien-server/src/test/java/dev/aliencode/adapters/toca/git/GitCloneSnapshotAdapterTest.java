@@ -14,7 +14,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import dev.aliencode.core.toca.domain.RepositorySeed;
+import dev.aliencode.core.toca.domain.model.RepositorySeed;
 
 class GitCloneSnapshotAdapterTest {
 
@@ -25,13 +25,13 @@ class GitCloneSnapshotAdapterTest {
 
     @BeforeEach
     void createRepository() throws Exception {
-        git("init", "-q", "-b", "main");
+        this.git("init", "-q", "-b", "main");
         Files.writeString(this.repo.resolve("README.md"), "v1");
-        git("add", ".");
-        git("commit", "-q", "-m", "v1");
-        git("tag", "v1");
+        this.git("add", ".");
+        this.git("commit", "-q", "-m", "v1");
+        this.git("tag", "v1");
         Files.writeString(this.repo.resolve("README.md"), "v2");
-        git("commit", "-q", "-am", "v2");
+        this.git("commit", "-q", "-am", "v2");
         Files.writeString(this.repo.resolve("README.md"), "sujo, não commitado");
     }
 

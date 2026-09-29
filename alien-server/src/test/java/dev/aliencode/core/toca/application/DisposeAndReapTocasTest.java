@@ -14,12 +14,12 @@ import org.junit.jupiter.api.Test;
 
 import dev.aliencode.core.toca.application.TocaTestDoubles.FakeSandbox;
 import dev.aliencode.core.toca.application.TocaTestDoubles.InMemoryTocas;
-import dev.aliencode.core.toca.domain.Toca;
-import dev.aliencode.core.toca.domain.TocaEndpoint;
-import dev.aliencode.core.toca.domain.TocaId;
-import dev.aliencode.core.toca.domain.TocaNotFoundException;
-import dev.aliencode.core.toca.domain.TocaStatus;
-import dev.aliencode.core.toca.port.ManagedSandbox;
+import dev.aliencode.core.toca.domain.exception.TocaNotFoundException;
+import dev.aliencode.core.toca.domain.model.Toca;
+import dev.aliencode.core.toca.domain.model.TocaEndpoint;
+import dev.aliencode.core.toca.domain.model.TocaId;
+import dev.aliencode.core.toca.domain.model.TocaStatus;
+import dev.aliencode.core.toca.port.sandbox.ManagedSandbox;
 
 class DisposeAndReapTocasTest {
 
@@ -40,7 +40,7 @@ class DisposeAndReapTocasTest {
 
     @Test
     void descartarRemoveOContainerEEIdempotente() {
-        Toca toca = readyToca(NOW.plusSeconds(600));
+        Toca toca = this.readyToca(NOW.plusSeconds(600));
 
         assertThat(this.dispose.dispose(toca.id()).status()).isEqualTo(TocaStatus.DISPOSED);
         assertThat(this.dispose.dispose(toca.id()).status()).isEqualTo(TocaStatus.DISPOSED);
@@ -54,8 +54,8 @@ class DisposeAndReapTocasTest {
 
     @Test
     void faxinaDescartaSoAsVencidas() {
-        Toca vencida = readyToca(NOW.minusSeconds(1));
-        Toca valida = readyToca(NOW.plusSeconds(600));
+        Toca vencida = this.readyToca(NOW.minusSeconds(1));
+        Toca valida = this.readyToca(NOW.plusSeconds(600));
 
         assertThat(this.reap.reapExpired()).containsExactly(vencida.id().value());
         assertThat(this.tocas.findById(valida.id()).orElseThrow().status()).isEqualTo(TocaStatus.READY);
@@ -63,7 +63,7 @@ class DisposeAndReapTocasTest {
 
     @Test
     void removeContainersOrfaosMasPreservaTocasAtivas() {
-        Toca ativa = readyToca(NOW.plusSeconds(600));
+        Toca ativa = this.readyToca(NOW.plusSeconds(600));
         this.sandbox.managed.add(new ManagedSandbox(ativa.containerId(), ativa.id().value()));
         this.sandbox.managed.add(new ManagedSandbox("orfao-1", "toca-0000dead"));
 

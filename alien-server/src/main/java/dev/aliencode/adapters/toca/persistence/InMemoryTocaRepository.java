@@ -7,9 +7,9 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import org.springframework.stereotype.Repository;
 
-import dev.aliencode.core.toca.domain.Toca;
-import dev.aliencode.core.toca.domain.TocaId;
-import dev.aliencode.core.toca.port.TocaRepository;
+import dev.aliencode.core.toca.domain.model.Toca;
+import dev.aliencode.core.toca.domain.model.TocaId;
+import dev.aliencode.core.toca.port.repository.TocaRepository;
 
 /**
  * Em memória por enquanto: ao reiniciar o servidor, as Tocas antigas viram órfãs

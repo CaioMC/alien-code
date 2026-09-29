@@ -15,8 +15,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
-import dev.aliencode.core.toca.domain.RepositorySeed;
-import dev.aliencode.core.toca.port.WorkspaceSnapshotPort;
+import dev.aliencode.core.toca.domain.model.RepositorySeed;
+import dev.aliencode.core.toca.port.workspace.WorkspaceSnapshotPort;
 
 /**
  * Snapshot com {@code git clone --local --no-hardlinks}: cópia independente do repositório,

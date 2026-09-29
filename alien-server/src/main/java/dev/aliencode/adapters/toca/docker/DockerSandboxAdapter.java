@@ -31,11 +31,11 @@ import com.github.dockerjava.api.model.PortBinding;
 import com.github.dockerjava.api.model.Ports;
 import com.github.dockerjava.api.model.StreamType;
 
-import dev.aliencode.core.toca.port.ExecResult;
-import dev.aliencode.core.toca.port.ManagedSandbox;
-import dev.aliencode.core.toca.port.SandboxHandle;
-import dev.aliencode.core.toca.port.SandboxPort;
-import dev.aliencode.core.toca.port.SandboxRequest;
+import dev.aliencode.core.toca.port.sandbox.ExecResult;
+import dev.aliencode.core.toca.port.sandbox.ManagedSandbox;
+import dev.aliencode.core.toca.port.sandbox.SandboxHandle;
+import dev.aliencode.core.toca.port.sandbox.SandboxPort;
+import dev.aliencode.core.toca.port.sandbox.SandboxRequest;
 
 /**
  * Tocas como containers Docker. Cada container nasce com:
@@ -61,8 +61,8 @@ public class DockerSandboxAdapter implements SandboxPort {
 
     @Override
     public SandboxHandle create(SandboxRequest request) {
-        requireImage(request.image());
-        ensureNetwork(request.network());
+        this.requireImage(request.image());
+        this.ensureNetwork(request.network());
 
         ExposedPort agentPort = ExposedPort.tcp(request.agentPort());
         HostConfig hostConfig = HostConfig.newHostConfig()
@@ -94,11 +94,11 @@ public class DockerSandboxAdapter implements SandboxPort {
                 .getId();
         try {
             this.docker.startContainerCmd(containerId).exec();
-            int hostPort = publishedPort(containerId, agentPort);
+            int hostPort = this.publishedPort(containerId, agentPort);
             log.debug("Container {} de {} publicado em {}:{}", containerId, request.tocaId(), LOOPBACK, hostPort);
             return new SandboxHandle(containerId, LOOPBACK, hostPort);
         } catch (RuntimeException e) {
-            remove(containerId);
+            this.remove(containerId);
             throw e;
         }
     }

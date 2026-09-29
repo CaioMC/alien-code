@@ -7,19 +7,19 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
-import dev.aliencode.core.toca.domain.RepositorySeed;
-import dev.aliencode.core.toca.domain.Toca;
-import dev.aliencode.core.toca.domain.TocaEndpoint;
-import dev.aliencode.core.toca.domain.TocaId;
-import dev.aliencode.core.toca.port.AgentHarnessPort;
-import dev.aliencode.core.toca.port.ExecResult;
-import dev.aliencode.core.toca.port.HarnessNotReadyException;
-import dev.aliencode.core.toca.port.ManagedSandbox;
-import dev.aliencode.core.toca.port.SandboxHandle;
-import dev.aliencode.core.toca.port.SandboxPort;
-import dev.aliencode.core.toca.port.SandboxRequest;
-import dev.aliencode.core.toca.port.TocaRepository;
-import dev.aliencode.core.toca.port.WorkspaceSnapshotPort;
+import dev.aliencode.core.toca.domain.model.RepositorySeed;
+import dev.aliencode.core.toca.domain.model.Toca;
+import dev.aliencode.core.toca.domain.model.TocaEndpoint;
+import dev.aliencode.core.toca.domain.model.TocaId;
+import dev.aliencode.core.toca.port.harness.AgentHarnessPort;
+import dev.aliencode.core.toca.port.harness.HarnessNotReadyException;
+import dev.aliencode.core.toca.port.repository.TocaRepository;
+import dev.aliencode.core.toca.port.sandbox.ExecResult;
+import dev.aliencode.core.toca.port.sandbox.ManagedSandbox;
+import dev.aliencode.core.toca.port.sandbox.SandboxHandle;
+import dev.aliencode.core.toca.port.sandbox.SandboxPort;
+import dev.aliencode.core.toca.port.sandbox.SandboxRequest;
+import dev.aliencode.core.toca.port.workspace.WorkspaceSnapshotPort;
 
 /** Dublês simples das portas da Toca, com registro do que foi chamado. */
 final class TocaTestDoubles {

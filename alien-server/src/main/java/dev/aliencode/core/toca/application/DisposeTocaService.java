@@ -4,11 +4,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
-import dev.aliencode.core.toca.domain.Toca;
-import dev.aliencode.core.toca.domain.TocaId;
-import dev.aliencode.core.toca.domain.TocaNotFoundException;
-import dev.aliencode.core.toca.port.SandboxPort;
-import dev.aliencode.core.toca.port.TocaRepository;
+import dev.aliencode.core.toca.domain.exception.TocaNotFoundException;
+import dev.aliencode.core.toca.domain.model.Toca;
+import dev.aliencode.core.toca.domain.model.TocaId;
+import dev.aliencode.core.toca.port.repository.TocaRepository;
+import dev.aliencode.core.toca.port.sandbox.SandboxPort;
 import dev.aliencode.core.toca.usecase.DisposeTocaUseCase;
 
 /** Passo 7 do ciclo de vida: remove o container. Idempotente. */

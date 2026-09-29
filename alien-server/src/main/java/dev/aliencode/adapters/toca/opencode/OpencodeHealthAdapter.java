@@ -15,9 +15,9 @@ import org.springframework.stereotype.Component;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import dev.aliencode.core.toca.domain.TocaEndpoint;
-import dev.aliencode.core.toca.port.AgentHarnessPort;
-import dev.aliencode.core.toca.port.HarnessNotReadyException;
+import dev.aliencode.core.toca.domain.model.TocaEndpoint;
+import dev.aliencode.core.toca.port.harness.AgentHarnessPort;
+import dev.aliencode.core.toca.port.harness.HarnessNotReadyException;
 
 /**
  * Espera o {@code opencode serve} da Toca responder em {@code GET /global/health}
