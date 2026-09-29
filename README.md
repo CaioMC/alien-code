@@ -60,6 +60,33 @@ Projeto novo: `{"seed": {"type": "new", "name": "meu-projeto"}}`.
 
 A senha do opencode de cada Toca nunca aparece na API.
 
+## Organização do código
+
+```
+alien-server/src/main/java/dev/aliencode/
+├── core/toca/                        regras de negócio, sem framework de infraestrutura
+│   ├── domain/model/                 Toca, TocaId, TocaStatus, TocaEndpoint, Seed, RepositorySeed
+│   ├── domain/exception/             TocaNotFoundException, TocaProvisioningException
+│   ├── port/sandbox/                 SandboxPort + SandboxRequest, SandboxHandle, ExecResult, ManagedSandbox
+│   ├── port/workspace/               WorkspaceSnapshotPort
+│   ├── port/harness/                 AgentHarnessPort, HarnessNotReadyException
+│   ├── port/repository/              TocaRepository
+│   ├── usecase/ (+ command/)         interfaces dos casos de uso e ProvisionTocaCommand
+│   └── application/                  implementação dos casos de uso, TocaSettings
+└── adapters/toca/                    tecnologia: tudo que o core não conhece
+    ├── web/controller/               TocaController (só traduz e delega)
+    ├── web/request/                  ProvisionTocaRequest, SeedRequest, RepositoryRequest (só dados)
+    ├── web/response/                 TocaResponse (só dados; sem senha)
+    ├── web/mapper/                   TocaWebMapper: DTO ⇄ domínio
+    ├── web/handler/                  ApiExceptionHandler (ProblemDetail)
+    ├── docker/ · git/ · opencode/    implementações das portas
+    ├── persistence/ · scheduling/    repositório em memória, faxina agendada
+    └── config/                       properties → TocaSettings, DockerClient, Clock
+```
+
+Cada fluxo (criar, semear, falhar, descartar, faxina, órfãos...) está desenhado classe a classe em
+[`docs/sequencias.md`](docs/sequencias.md).
+
 ## Testes
 
 ```bash
