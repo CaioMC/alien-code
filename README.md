@@ -11,7 +11,7 @@ e mostra cada passo da execução ao vivo — no estilo do Manus e do Claude Cod
 | Marco | Situação |
 |---|---|
 | **M0 · Esqueleto** — imagem da Toca com opencode; o Alien Server cria, semeia e destrói Tocas | ✅ |
-| **M1 · Timeline ao vivo** — missão com 1 repo e 1 tarefa; eventos do opencode → WebSocket → UI | servidor ✅ · UI em andamento |
+| **M1 · Timeline ao vivo** — missão com 1 repo e 1 tarefa; eventos do opencode → WebSocket → UI | ✅ |
 | M2 · Entrega segura · M3 · Grafo · M4 · Multi-repo + DAG · M5 · AI-DLC completo | planejado |
 
 O que já funciona:
@@ -31,6 +31,10 @@ O que já funciona:
   fluxo SSE do opencode em eventos da timeline (raciocínio, texto, tool calls, terminal, diffs,
   tokens), gravados em ordem num Event Store SQLite e entregues por WebSocket. Reconectar com
   `lastSeq` reenvia só o que faltou; **Parar** aborta a sessão; ao fim, a Toca é descartada.
+- **Alien Web** ([`alien-web/`](alien-web/)), React + TypeScript + Vite: abre missões, mostra a
+  timeline ao vivo (passos, raciocínio recolhível, tool calls como sub-linhas com duração e saída),
+  as abas Terminal e Diff, tokens gastos e o botão **Parar** (ou `Esc`). Se a conexão cair, ele
+  reconecta sozinho com o último `seq` recebido.
 
 ## Como rodar
 
@@ -46,9 +50,13 @@ docker compose exec ollama ollama pull qwen3:8b
 
 # 3. servidor (escuta só em 127.0.0.1:8080)
 cd alien-server && mvn spring-boot:run
+
+# 4. interface (http://127.0.0.1:5173; /api e /ws vão para o servidor pelo proxy do Vite)
+cd alien-web && npm install && npm run dev
 ```
 
-Abrir uma missão e acompanhar a timeline:
+Pela interface: **Nova missão** → descreva a tarefa, informe o caminho do repositório → **Abrir
+missão**. Pela linha de comando:
 
 ```bash
 curl -s -X POST localhost:8080/api/missions -H 'Content-Type: application/json' -d '{
@@ -131,6 +139,12 @@ adapters/mission/
 ├── opencode/                         OpencodeSessionAdapter (HTTP + SSE), OpencodeEventTranslator
 ├── persistence/                      SqliteEventStore, SqliteMissionRepository
 └── scheduling/ · config/             MissionRecovery, SQLite, executor de threads virtuais
+
+alien-web/src/
+├── domain/                           envelope AlienEvent e o reducer puro da timeline (eventos → passos)
+├── api/                              REST (missionsApi) e MissionSocket (reconexão com lastSeq)
+├── hooks/                            useMissionTimeline
+└── components/                       App, NewMissionForm, MissionView, Timeline, TerminalPanel, DiffPanel
 ```
 
 Cada fluxo (criar, semear, falhar, descartar, faxina, órfãos...) está desenhado classe a classe em
@@ -139,6 +153,9 @@ Cada fluxo (criar, semear, falhar, descartar, faxina, órfãos...) está desenha
 ## Testes
 
 ```bash
+cd alien-web
+npm test     # reducer da timeline, reconexão do WebSocket com lastSeq, renderização
+
 cd alien-server
 mvn test     # unitários (domínio, casos de uso, adaptadores com git e HTTP reais)
 mvn verify   # + integração: sobe Tocas reais no Docker (precisa da imagem e da rede alien-net)
@@ -191,6 +208,8 @@ O `message.part.delta` traz só o id da parte; o tipo (texto ou raciocínio) vem
   `bash` liberados (`webfetch` negado). Os pedidos de permissão viram `approval.requested` no M2.
 - **Saídas grandes (M1):** `output` e `patch` são cortados em 16 mil caracteres no evento
   (`truncated: true`); o endpoint de blobs chega no M2.
+- **Alien Web:** React 19 (a especificação cita 18, a versão estável quando foi escrita) e Vitest 4,
+  compatível com o Node 20 da máquina.
 - **Rede `alien-net`:** passa a ser criada pelo `compose.yaml`, junto com o Ollama (alias `ollama`).
 - **Configuração do opencode:** entregue à Toca em `OPENCODE_CONFIG_CONTENT`, gerada a partir de
   `alien.agent.*` (provedor Ollama compatível com OpenAI, `timeout` do provedor ampliado).
