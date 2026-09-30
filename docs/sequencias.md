@@ -19,6 +19,13 @@ classes; as mensagens são os métodos chamados.
 | 10 | [Faxina de Tocas vencidas (TTL)](#10-faxina-de-tocas-vencidas-ttl) | `@Scheduled` |
 | 11 | [Remoção de órfãos ao subir](#11-remoção-de-containers-órfãos-ao-subir-o-servidor) | `ApplicationReadyEvent` |
 | 12 | [Inicialização dentro da Toca](#12-inicialização-dentro-da-toca) | `docker start` |
+| 13 | [Mapa das camadas da missão (M1)](#13-mapa-das-camadas-da-missão-m1) | — |
+| 14 | [Abrir uma missão](#14-abrir-uma-missão) | `POST /api/missions` |
+| 15 | [Conduzir a missão: Toca, sessão e eventos](#15-conduzir-a-missão-toca-sessão-e-eventos) | `MissionConductor.conduct` |
+| 16 | [Timeline ao vivo e reconexão](#16-timeline-ao-vivo-e-reconexão) | `WS /ws/missions/{id}?lastSeq=N` |
+| 17 | [Parar a missão](#17-parar-a-missão) | `{"type":"stop"}` ou `POST /api/missions/{id}/stop` |
+| 18 | [Erro do agente e tempo esgotado](#18-erro-do-agente-e-tempo-esgotado) | `session.error` / `task-timeout` |
+| 19 | [Missões interrompidas por reinício](#19-missões-interrompidas-por-reinício) | `ApplicationReadyEvent` |
 
 ## 0. Mapa das camadas
 
@@ -507,4 +514,238 @@ sequenceDiagram
     Ep->>Ep: git config --global user.name "Alien Code",<br/>user.email, init.defaultBranch main
     Ep->>Oc: exec opencode serve --hostname 0.0.0.0 --port 4096
     Oc-->>Dk: escutando em 0.0.0.0:4096<br/>(publicada no host só em 127.0.0.1)
+```
+
+## 13. Mapa das camadas da missão (M1)
+
+A missão é um contexto próprio (`core.mission` / `adapters.mission`). Ela usa a Toca pelos casos
+de uso do contexto `toca` (`ProvisionTocaUseCase`, `DisposeTocaUseCase`), nunca pelas portas dele.
+
+```mermaid
+flowchart LR
+    subgraph IN["adapters.mission (entrada)"]
+        C["web.controller<br/>MissionController"]
+        M["web.mapper<br/>MissionWebMapper"]
+        W["websocket.handler<br/>MissionWebSocketHandler"]
+        WM["websocket.mapper<br/>AlienEventMessageMapper"]
+        R["scheduling<br/>MissionRecovery"]
+    end
+
+    subgraph CORE["core.mission"]
+        UC["usecase<br/>StartMissionUseCase · GetMissionUseCase<br/>StopMissionUseCase · WatchMissionUseCase<br/>FailInterruptedMissionsUseCase"]
+        APP["application<br/>StartMissionService · MissionConductor<br/>MissionEventHub · TaskTimeline · RunningMission"]
+        DOM["domain.model<br/>Mission · MissionId · MissionStatus · AgentModel<br/>AlienEvent · NewEvent · EventType · EventSource"]
+        PORT["port<br/>agent · event · repository"]
+    end
+
+    subgraph TOCA["core.toca"]
+        TUC["usecase<br/>ProvisionTocaUseCase · DisposeTocaUseCase"]
+    end
+
+    subgraph OUT["adapters.mission (saída)"]
+        O["opencode<br/>OpencodeSessionAdapter<br/>OpencodeEventTranslator"]
+        P["persistence<br/>SqliteEventStore · SqliteMissionRepository"]
+    end
+
+    C --> M
+    C & W & R --> UC
+    W --> WM
+    APP -. implementa .-> UC
+    APP --> DOM & PORT & TUC
+    O & P -. implementam .-> PORT
+```
+
+## 14. Abrir uma missão
+
+`POST /api/missions` responde na hora, com a missão em `CREATED`. O trabalho segue em segundo
+plano num thread virtual (diagrama 15).
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Dev
+    participant Ctl as MissionController
+    participant Map as MissionWebMapper
+    participant TMap as TocaWebMapper
+    participant Svc as StartMissionService
+    participant Prov as ProvisionTocaService
+    participant Repo as SqliteMissionRepository
+    participant Hub as MissionEventHub
+    participant Store as SqliteEventStore
+    participant Cond as MissionConductor
+
+    Dev->>Ctl: POST /api/missions {prompt, seed, model?}
+    Ctl->>Map: toCommand(request)
+    Map->>TMap: toSeed(seed)
+    Map-->>Ctl: StartMissionCommand
+    Ctl->>Svc: start(command)
+    Svc->>Svc: validateSeed: um único repositório no M1
+    Svc->>Prov: validate(seed): existe e está nas pastas permitidas
+    Svc->>Svc: Mission.create(...) em CREATED<br/>(modelo padrão se não veio)
+    Svc->>Repo: save(mission)
+    Svc->>Hub: publish(mission.created)
+    Hub->>Store: append(event): seq 1
+    Svc->>Cond: conduct(mission)
+    Cond-)Cond: missionExecutor.execute(run)
+    Svc-->>Ctl: Mission
+    Ctl-->>Dev: 201 {id, status: CREATED}
+```
+
+## 15. Conduzir a missão: Toca, sessão e eventos
+
+O orquestrador decide cada transição; o modelo só produz eventos. Cada evento do opencode passa
+por dois tradutores: `OpencodeEventTranslator` (formato do opencode → `AgentEvent`, neutro) e
+`TaskTimeline` (`AgentEvent` → linhas da timeline, com `stepId` e `parentStepId`).
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Cond as MissionConductor
+    participant Prov as ProvisionTocaService
+    participant Ag as OpencodeSessionAdapter
+    participant Tr as OpencodeEventTranslator
+    participant Oc as opencode serve (na Toca)
+    participant TL as TaskTimeline
+    participant Hub as MissionEventHub
+    participant Disp as DisposeTocaService
+
+    Cond->>Hub: mission.state PROVISIONING, step.started toca
+    Cond->>Prov: provision(missionId, seed)
+    Prov-->>Cond: Toca READY (endpoint, /workspace/repo)
+    Cond->>Hub: step.completed toca, mission.state (tocaId)
+    Cond->>Ag: subscribe(endpoint, directory, listener)
+    Ag->>Oc: GET /event?directory=... (SSE, HTTP/1.1)
+    Cond->>Ag: createSession(endpoint, directory, title)
+    Ag->>Oc: POST /session
+    Oc-->>Ag: ses_...
+    Cond->>Hub: mission.state EXECUTING, step.started t1
+    Cond->>Ag: prompt(sessionId, model, prompt)
+    Ag->>Oc: POST /session/{id}/prompt_async
+    loop enquanto o agente trabalha
+        Oc--)Ag: message.part.updated / message.part.delta
+        Ag->>Tr: translate(event)
+        Tr-->>Ag: TextDelta · ReasoningDelta · ToolStarted<br/>ToolFinished · FileChanged · ModelCallFinished
+        Ag->>Cond: onAgentEvent(run, timeline, event)
+        Cond->>TL: translate(event)
+        TL-->>Cond: assistant.delta · thinking.delta · tool.started<br/>tool.completed · terminal.output · file.changed · budget.updated
+        Cond->>Hub: publishAll(events)
+    end
+    Oc--)Ag: session.idle
+    Ag->>Cond: SessionIdle
+    Cond->>Cond: RunningMission.finish(COMPLETED)
+    Cond->>Hub: step.completed t1, mission.state COMPLETED
+    Cond->>Ag: subscription.close()
+    Cond->>Disp: dispose(tocaId)
+    Cond->>Hub: step.completed toca.dispose
+```
+
+## 16. Timeline ao vivo e reconexão
+
+Gravar + distribuir e reproduzir + registrar acontecem sob o mesmo lock por missão: quem conecta
+no meio da execução recebe o histórico e depois o ao vivo, sem buraco nem repetição.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Web as Navegador (Alien Web)
+    participant Ws as MissionWebSocketHandler
+    participant Hub as MissionEventHub
+    participant Store as SqliteEventStore
+    participant WMap as AlienEventMessageMapper
+    participant Cond as MissionConductor
+
+    Web->>Ws: WS /ws/missions/m-42?lastSeq=317
+    Ws->>Hub: watch(m-42, 317, listener)
+    Hub->>Hub: lock(m-42)
+    Hub->>Store: findAfter(m-42, 317)
+    Store-->>Hub: eventos 318..N
+    Hub->>Ws: listener.onEvent (cada um, em ordem)
+    Ws->>WMap: toMessage(event)
+    Ws-->>Web: envelope {v, missionId, seq, ts, type, stepId, parentStepId, source, payload}
+    Hub->>Hub: registra o listener e libera o lock
+    Cond->>Hub: publish(novo evento)
+    Hub->>Store: append: seq N+1
+    Hub->>Ws: listener.onEvent
+    Ws-->>Web: envelope seq N+1
+    Web--xWs: conexão cai
+    Ws->>Hub: MissionWatch.close()
+    Note over Web,Ws: a missão continua no servidor.<br/>Ao voltar, o cliente reconecta com o último seq visto.
+```
+
+## 17. Parar a missão
+
+A parada pode chegar antes da sessão existir (durante o provisionamento): `RunningMission`
+guarda o pedido, e o orquestrador aborta assim que a sessão é criada, ou nem cria.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Web as Navegador (Alien Web)
+    participant Ws as MissionWebSocketHandler
+    participant Stop as StopMissionService
+    participant Cond as MissionConductor
+    participant Run as RunningMission
+    participant Ag as OpencodeSessionAdapter
+    participant Oc as opencode serve (na Toca)
+    participant TL as TaskTimeline
+    participant Hub as MissionEventHub
+
+    Web->>Ws: {"type":"stop"}
+    Ws->>Stop: stop(missionId)
+    Stop->>Cond: requestStop(missionId)
+    Cond->>Run: requestStop(): desfecho STOPPED
+    Run-->>Cond: já há sessão
+    Cond->>Ag: abort(endpoint, directory, sessionId)
+    Ag->>Oc: POST /session/{id}/abort
+    Oc--)Ag: session.error MessageAbortedError, session.idle
+    Note over Cond,Run: o desfecho já é STOPPED, o idle não vira COMPLETED
+    Cond->>TL: closeOpenTools("Parada pelo usuário")
+    Cond->>Hub: tool.completed cancelled, step.failed t1,<br/>mission.state CANCELLED
+    Cond->>Cond: disposeIfNeeded: descarta a Toca
+```
+
+## 18. Erro do agente e tempo esgotado
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Oc as opencode serve (na Toca)
+    participant Ag as OpencodeSessionAdapter
+    participant Cond as MissionConductor
+    participant Run as RunningMission
+    participant Hub as MissionEventHub
+
+    alt provedor falha (ex.: modelo inexistente)
+        Oc--)Ag: session.error APIError "model not found"
+        Ag->>Cond: SessionFailed(aborted=false)
+        Cond->>Run: finish(FAILED, mensagem)
+    else passou do alien.mission.task-timeout
+        Run-->>Cond: await() estoura: TIMED_OUT
+        Cond->>Ag: abort(sessionId)
+    end
+    Cond->>Hub: step.failed t1 {reason}, mission.state FAILED {reason}
+    Cond->>Cond: disposeIfNeeded: descarta a Toca
+```
+
+## 19. Missões interrompidas por reinício
+
+As missões e os eventos ficam no SQLite (`alien.mission.store-path`), mas quem conduzia a missão
+morreu com o processo, e a Toca dela vira órfã (diagrama 11).
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Boot as Spring Boot
+    participant Rec as MissionRecovery
+    participant Svc as FailInterruptedMissionsService
+    participant Repo as SqliteMissionRepository
+    participant Hub as MissionEventHub
+
+    Boot->>Rec: ApplicationReadyEvent
+    Rec->>Svc: failInterrupted()
+    Svc->>Repo: findAll()
+    loop missões ativas sem condução
+        Svc->>Repo: save(mission.failed("O servidor foi reiniciado durante a missão"))
+        Svc->>Hub: publish(mission.state FAILED)
+    end
 ```
