@@ -98,12 +98,7 @@ mvn verify   # + integração: sobe Tocas reais no Docker (precisa da imagem ali
 ## Especificação
 
 A especificação completa, com diagramas, está em
-[`docs/alien-code-especificacao.pdf`](docs/alien-code-especificacao.pdf). O PDF é gerado por código:
-
-```bash
-python -m venv .venv && .venv/bin/pip install reportlab
-.venv/bin/python docs/pdf/gerar_especificacao.py
-```
+[`docs/alien-code-especificacao.pdf`](docs/alien-code-especificacao.pdf).
 
 [`docs/referencias/opencode-1.18.33-openapi.json`](docs/referencias/opencode-1.18.33-openapi.json)
 é o contrato real da API do opencode fixado na imagem, extraído de `GET /doc`. Ele é a fonte para o
