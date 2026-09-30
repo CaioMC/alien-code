@@ -1,0 +1,35 @@
+# Serviços de apoio do Alien Code na máquina do dev.
+#
+#   docker compose up -d ollama
+#   docker compose exec ollama ollama pull qwen3:8b
+#
+# O Ollama entra na rede das Tocas (alien-net) com o nome "ollama", que é como o opencode
+# dentro da Toca o alcança. A porta só é publicada em 127.0.0.1, para o Alien Server e para
+# testes manuais no host.
+name: alien-code
+
+services:
+  ollama:
+    image: ollama/ollama:0.35.0
+    container_name: alien-ollama
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:11434:11434"
+    environment:
+      OLLAMA_KEEP_ALIVE: 30m
+      OLLAMA_CONTEXT_LENGTH: 16384
+    volumes:
+      - ollama-models:/root/.ollama
+    networks:
+      alien-net:
+        aliases:
+          - ollama
+
+volumes:
+  ollama-models:
+
+networks:
+  alien-net:
+    name: alien-net
+    labels:
+      alien.managed: "true"
