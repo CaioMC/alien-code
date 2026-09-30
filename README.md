@@ -47,6 +47,7 @@ docker build -t alien/toca:0.1 toca/
 # 2. Ollama e a rede das Tocas (alien-net)
 docker compose up -d ollama
 docker compose exec ollama ollama pull qwen3:8b
+docker compose exec ollama ollama create qwen3-8b-t10 -f /modelfiles/qwen3-8b-t10.Modelfile
 
 # 3. servidor (escuta só em 127.0.0.1:8080)
 cd alien-server && mvn spring-boot:run
@@ -75,9 +76,11 @@ websocat 'ws://127.0.0.1:8080/ws/missions/m-3f9a1c2e?lastSeq=0'    # um envelope
 | `POST /api/missions/{id}/stop` | Para a missão (aborta a sessão e descarta a Toca) |
 | `WS /ws/missions/{id}?lastSeq=N` | Eventos com seq > N e depois ao vivo; aceita `{"type":"stop"}` |
 
-> **Desempenho sem GPU.** Numa CPU de notebook (i7-1255U), o `qwen3:8b` processa o prompt a
-> ~19 tokens/s e gera a ~4 tokens/s; só o system prompt do opencode tem ~7k tokens, então cada
-> tarefa leva dezenas de minutos. Por isso `alien.agent.request-timeout` é 30 min. Com GPU, ou
+> **Desempenho sem GPU.** Sem GPU, o Ollama usa só 2 threads; o modelo padrão `qwen3-8b-t10`
+> é o `qwen3:8b` com 10 threads ([`ollama/qwen3-8b-t10.Modelfile`](ollama/qwen3-8b-t10.Modelfile)).
+> Mesmo assim, numa CPU de notebook (i7-1255U) ele processa o prompt a ~19 tokens/s e gera a
+> ~4 tokens/s; só o system prompt do opencode tem ~7k tokens. Uma tarefa simples (corrigir uma
+> função) levou 16 min. Por isso `alien.agent.request-timeout` é 30 min. Com GPU, ou
 > com um Ollama em outra máquina (`alien.agent.base-url`), o mesmo fluxo roda em segundos. Os
 > testes não dependem de modelo: usam um LLM roteirizado (veja *Testes*).
 

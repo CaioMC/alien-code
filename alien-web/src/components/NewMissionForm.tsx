@@ -91,7 +91,7 @@ export function NewMissionForm({ onStarted }: Props) {
 
       <label>
         Modelo (opcional)
-        <input value={model} onChange={(e) => setModel(e.target.value)} placeholder="padrão do servidor (ollama/qwen3:8b)" />
+        <input value={model} onChange={(e) => setModel(e.target.value)} placeholder="padrão do servidor (ollama/qwen3-8b-t10)" />
       </label>
 
       {error && <p className="error">{error}</p>}

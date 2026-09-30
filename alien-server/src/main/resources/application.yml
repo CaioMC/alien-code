@@ -29,9 +29,11 @@ alien:
   agent:
     # Ollama visto de dentro da Toca: container "ollama" na rede alien-net (compose.yaml)
     base-url: http://ollama:11434/v1
+    # qwen3-8b-t10: qwen3:8b com 10 threads na CPU (ollama/qwen3-8b-t10.Modelfile)
     models:
+      - qwen3-8b-t10
       - qwen3:8b
-    default-model: ollama/qwen3:8b
+    default-model: ollama/qwen3-8b-t10
     # Na CPU, uma chamada com o system prompt do opencode (~7k tokens) passa dos 5 min padrão
     request-timeout: 30m
   mission:

@@ -1,0 +1,7 @@
+# qwen3:8b com 10 threads na CPU.
+# Sem GPU, o Ollama usa por padrão só os núcleos de desempenho (2 threads num i7-1255U),
+# o que deixa o processamento do prompt do opencode (~7k tokens) lento demais.
+#
+#   docker compose exec ollama ollama create qwen3-8b-t10 -f /modelfiles/qwen3-8b-t10.Modelfile
+FROM qwen3:8b
+PARAMETER num_thread 10
