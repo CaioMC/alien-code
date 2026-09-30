@@ -6,6 +6,10 @@ server:
 spring:
   application:
     name: alien-server
+  sql:
+    init:
+      # schema.sql cria as tabelas do Event Store se ainda não existirem
+      mode: always
 
 alien:
   toca:
@@ -22,6 +26,18 @@ alien:
   workspace:
     allowed-roots:
       - ${user.home}
+  agent:
+    # Ollama visto de dentro da Toca: container "ollama" na rede alien-net (compose.yaml)
+    base-url: http://ollama:11434/v1
+    models:
+      - qwen3:8b
+    default-model: ollama/qwen3:8b
+    # Na CPU, uma chamada com o system prompt do opencode (~7k tokens) passa dos 5 min padrão
+    request-timeout: 30m
+  mission:
+    task-timeout: 45m
+    keep-toca: false
+    store-path: ${user.home}/.alien-code/alien.db
 
 logging:
   level:

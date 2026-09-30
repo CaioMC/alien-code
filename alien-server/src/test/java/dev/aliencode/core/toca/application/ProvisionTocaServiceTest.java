@@ -32,6 +32,7 @@ import dev.aliencode.core.toca.usecase.command.ProvisionTocaCommand;
 class ProvisionTocaServiceTest {
 
     private static final Instant NOW = Instant.parse("2026-09-28T12:00:00Z");
+    private static final String AGENT_CONFIG = "{\"model\":\"ollama/qwen3:8b\"}";
 
     @TempDir
     Path root;
@@ -48,10 +49,29 @@ class ProvisionTocaServiceTest {
         this.snapshots = new FakeSnapshots();
         this.harness = new FakeHarness();
         this.tocas = new InMemoryTocas();
-        TocaSettings settings = new TocaSettings("alien/toca:0.1", "alien-net", 4096, "opencode",
-                6L << 30, 4_000_000_000L, 512, Duration.ofMinutes(60), Duration.ofSeconds(5), List.of(this.root));
-        this.service = new ProvisionTocaService(this.sandbox, this.snapshots, this.harness, this.tocas, settings,
-                Clock.fixed(NOW, ZoneOffset.UTC));
+
+        TocaSettings settings = new TocaSettings(
+                "alien/toca:0.1",
+                "alien-net",
+                4096,
+                "opencode",
+                6L << 30,
+                4_000_000_000L,
+                512,
+                Duration.ofMinutes(60),
+                Duration.ofSeconds(5),
+                List.of(this.root),
+                AGENT_CONFIG
+        );
+
+        this.service = new ProvisionTocaService(
+                this.sandbox,
+                this.snapshots,
+                this.harness,
+                this.tocas,
+                settings,
+                Clock.fixed(NOW, ZoneOffset.UTC)
+        );
     }
 
     @Test
@@ -80,6 +100,7 @@ class ProvisionTocaServiceTest {
         assertThat(request.env().get("OPENCODE_SERVER_PASSWORD")).hasSizeGreaterThanOrEqualTo(32);
         assertThat(request.env().get("OPENCODE_SERVER_PASSWORD")).isEqualTo(this.harness.lastEndpoint.password());
         assertThat(request.labels()).containsEntry("alien.mission", "m-42").containsKey("alien.expires-at");
+        assertThat(request.env()).containsEntry("OPENCODE_CONFIG_CONTENT", AGENT_CONFIG);
     }
 
     @Test

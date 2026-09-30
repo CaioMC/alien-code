@@ -1,0 +1,30 @@
+data: {"id": "evt_0efeb2af2001kbtHDNGVjwjoF9", "type": "server.connected", "properties": {}}
+
+data: {"id": "evt_0efeb2eca001jcG4n3Fgm0gy7p", "type": "session.created", "properties": {"sessionID": "ses_f1014d136ffer03oRDGr2rT02z", "info": {"id": "ses_f1014d136ffer03oRDGr2rT02z", "slug": "calm-knight", "version": "1.18.33", "projectID": "970febd1751c4d9efb8ae08101767cc0d912b64e", "directory": "/workspace/demo", "path": "", "title": "spike", "cost": 0, "tokens": {"input": 0, "output": 0, "reasoning": 0, "cache": {"read": 0, "write": 0}}, "time": {"created": 1790731562698, "updated": 1790731562698}}}}
+
+data: {"id": "evt_0efeb2ed2001d7qLQsq0PsuBnD", "type": "session.updated", "properties": {"sessionID": "ses_f1014d136ffer03oRDGr2rT02z", "info": {"id": "ses_f1014d136ffer03oRDGr2rT02z", "slug": "calm-knight", "projectID": "970febd1751c4d9efb8ae08101767cc0d912b64e", "directory": "/workspace/demo", "path": "", "title": "spike", "agent": "build", "model": {"id": "roteiro", "providerID": "fake", "variant": "default"}, "version": "1.18.33", "cost": 0, "tokens": {"input": 0, "output": 0, "reasoning": 0, "cache": {"read": 0, "write": 0}}, "time": {"created": 1790731562698, "updated": 1790731562705}}}}
+
+data: {"id": "evt_0efeb2ed30014PGAPqF5ZIKOIU", "type": "message.updated", "properties": {"sessionID": "ses_f1014d136ffer03oRDGr2rT02z", "info": {"id": "msg_0efeb2ed1001YqbAiLHwfVmJ2F", "role": "user", "sessionID": "ses_f1014d136ffer03oRDGr2rT02z", "time": {"created": 1790731562705}, "agent": "build", "model": {"providerID": "fake", "modelID": "roteiro"}}}}
+
+data: {"id": "evt_0efeb2ed5001w14gFLHLWQ2A0l", "type": "message.part.updated", "properties": {"sessionID": "ses_f1014d136ffer03oRDGr2rT02z", "part": {"type": "text", "text": "quebra tudo", "messageID": "msg_0efeb2ed1001YqbAiLHwfVmJ2F", "sessionID": "ses_f1014d136ffer03oRDGr2rT02z", "id": "prt_0efeb2ed3001PpZg6FcFR4tY1y"}, "time": 1790731562709}}
+
+data: {"id": "evt_0efeb2ed60015Cs63fQ58TPkJv", "type": "session.updated", "properties": {"sessionID": "ses_f1014d136ffer03oRDGr2rT02z", "info": {"id": "ses_f1014d136ffer03oRDGr2rT02z", "slug": "calm-knight", "projectID": "970febd1751c4d9efb8ae08101767cc0d912b64e", "directory": "/workspace/demo", "path": "", "title": "spike", "agent": "build", "model": {"id": "roteiro", "providerID": "fake", "variant": "default"}, "version": "1.18.33", "cost": 0, "tokens": {"input": 0, "output": 0, "reasoning": 0, "cache": {"read": 0, "write": 0}}, "time": {"created": 1790731562698, "updated": 1790731562710}}}}
+
+data: {"id": "evt_0efeb2ed8001wIvzXrESi52fm0", "type": "session.status", "properties": {"sessionID": "ses_f1014d136ffer03oRDGr2rT02z", "status": {"type": "busy"}}}
+
+data: {"id": "evt_0efeb2ed9001wfTIXkuNdwSq1q", "type": "message.updated", "properties": {"sessionID": "ses_f1014d136ffer03oRDGr2rT02z", "info": {"id": "msg_0efeb2ed9001gXIdqCWvhFtzfo", "parentID": "msg_0efeb2ed1001YqbAiLHwfVmJ2F", "role": "assistant", "mode": "build", "agent": "build", "path": {"cwd": "/workspace/demo", "root": "/workspace/demo"}, "cost": 0, "tokens": {"input": 0, "output": 0, "reasoning": 0, "cache": {"read": 0, "write": 0}}, "modelID": "roteiro", "providerID": "fake", "time": {"created": 1790731562713}, "sessionID": "ses_f1014d136ffer03oRDGr2rT02z"}}}
+
+data: {"id": "evt_0efeb2efa001FDS6kBqFzFpa1O", "type": "session.updated", "properties": {"sessionID": "ses_f1014d136ffer03oRDGr2rT02z", "info": {"id": "ses_f1014d136ffer03oRDGr2rT02z", "slug": "calm-knight", "projectID": "970febd1751c4d9efb8ae08101767cc0d912b64e", "directory": "/workspace/demo", "path": "", "title": "spike", "agent": "build", "model": {"id": "roteiro", "providerID": "fake", "variant": "default"}, "version": "1.18.33", "summary": {"additions": 0, "deletions": 0, "files": 0}, "cost": 0, "tokens": {"input": 0, "output": 0, "reasoning": 0, "cache": {"read": 0, "write": 0}}, "time": {"created": 1790731562698, "updated": 1790731562745}}}}
+
+data: {"id": "evt_0efeb2efb001gdzh6JFKpJdHPl", "type": "session.diff", "properties": {"sessionID": "ses_f1014d136ffer03oRDGr2rT02z", "diff": []}}
+
+data: {"id": "evt_0efeb2efd001Z9Z2qWuBsnauX6", "type": "message.updated", "properties": {"sessionID": "ses_f1014d136ffer03oRDGr2rT02z", "info": {"role": "user", "time": {"created": 1790731562705}, "agent": "build", "model": {"providerID": "fake", "modelID": "roteiro"}, "id": "msg_0efeb2ed1001YqbAiLHwfVmJ2F", "sessionID": "ses_f1014d136ffer03oRDGr2rT02z", "summary": {"diffs": []}}}}
+
+data: {"id": "evt_0efeb2f07001ZJFfGEiKIuayme", "type": "session.status", "properties": {"sessionID": "ses_f1014d136ffer03oRDGr2rT02z", "status": {"type": "busy"}}}
+
+data: {"id": "evt_0efeb2f110012mvaCTzRJdTAdK", "type": "session.error", "properties": {"sessionID": "ses_f1014d136ffer03oRDGr2rT02z", "error": {"name": "APIError", "data": {"message": "model not found: qwen9:999b", "statusCode": 400, "isRetryable": false, "responseHeaders": {"content-type": "application/json", "date": "Wed, 30 Sep 2026 01:26:02 GMT", "server": "BaseHTTP/0.6 Python/3.12.3"}, "responseBody": "{\"error\":{\"message\":\"model not found: qwen9:999b\",\"type\":\"invalid_request_error\"}}", "metadata": {"url": "http://172.25.0.1:18434/v1/chat/completions"}}}}}
+
+data: {"id": "evt_0efeb2f11002ThJooZ4Y9K0HHn", "type": "session.status", "properties": {"sessionID": "ses_f1014d136ffer03oRDGr2rT02z", "status": {"type": "idle"}}}
+
+data: {"id": "evt_0efeb2f11003wu6I69ov2E4OGt", "type": "session.idle", "properties": {"sessionID": "ses_f1014d136ffer03oRDGr2rT02z"}}
+

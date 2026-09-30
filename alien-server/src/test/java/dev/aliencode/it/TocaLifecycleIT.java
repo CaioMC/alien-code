@@ -77,6 +77,7 @@ class TocaLifecycleIT {
         registry.add("alien.workspace.allowed-roots", () -> root.toString());
         registry.add("alien.toca.memory", () -> "1GB");
         registry.add("alien.toca.cpus", () -> "1");
+        registry.add("alien.mission.store-path", () -> root.resolve("alien.db").toString());
     }
 
     @AfterEach

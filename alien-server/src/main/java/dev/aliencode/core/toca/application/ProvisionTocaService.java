@@ -79,7 +79,7 @@ public class ProvisionTocaService implements ProvisionTocaUseCase {
 
     @Override
     public Toca provision(ProvisionTocaCommand command) {
-        this.validateSeed(command.seed());
+        this.validate(command.seed());
 
         Instant now = this.clock.instant();
 
@@ -129,7 +129,8 @@ public class ProvisionTocaService implements ProvisionTocaUseCase {
         }
     }
 
-    private void validateSeed(Seed seed) {
+    @Override
+    public void validate(Seed seed) {
         if (seed instanceof Seed.ExistingRepositories(List<RepositorySeed> repositories)) {
             for (RepositorySeed repository : repositories) {
                 if (!this.settings.isAllowed(repository.path())) {
@@ -149,6 +150,10 @@ public class ProvisionTocaService implements ProvisionTocaUseCase {
         env.put("OPENCODE_SERVER_PASSWORD", password);
         env.put("OPENCODE_SERVER_USERNAME", this.settings.agentUsername());
         env.put("OPENCODE_PORT", String.valueOf(this.settings.agentPort()));
+
+        if (nonNull(this.settings.agentConfig())) {
+            env.put("OPENCODE_CONFIG_CONTENT", this.settings.agentConfig());
+        }
 
         Map<String, String> labels = new HashMap<>();
 
@@ -194,6 +199,7 @@ public class ProvisionTocaService implements ProvisionTocaUseCase {
                 this.snapshots.discard(snapshot);
             }
         }
+
         return dirs;
     }
 

@@ -5,12 +5,14 @@ import java.time.Clock;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.dockerjava.api.DockerClient;
 import com.github.dockerjava.core.DefaultDockerClientConfig;
 import com.github.dockerjava.core.DockerClientConfig;
 import com.github.dockerjava.core.DockerClientImpl;
 import com.github.dockerjava.httpclient5.ApacheDockerHttpClient;
 
+import dev.aliencode.adapters.toca.opencode.OpencodeConfigFactory;
 import dev.aliencode.core.toca.application.TocaSettings;
 
 import static java.util.Objects.isNull;
@@ -23,8 +25,17 @@ import static java.util.Objects.isNull;
 public class TocaConfig {
 
     @Bean
-    TocaSettings tocaSettings(AlienProperties properties) {
+    TocaSettings tocaSettings(AlienProperties properties, ObjectMapper json) {
         AlienProperties.Toca toca = properties.toca();
+        AlienProperties.Agent agent = properties.agent();
+
+        String agentConfig = new OpencodeConfigFactory(json).create(
+                agent.baseUrl(),
+                agent.models(),
+                agent.defaultModel(),
+                agent.requestTimeout().toMillis()
+        );
+
         return new TocaSettings(
                 toca.image(),
                 toca.network(),
@@ -35,7 +46,9 @@ public class TocaConfig {
                 toca.pidsLimit(),
                 toca.ttl(),
                 toca.readyTimeout(),
-                properties.workspace().allowedRoots());
+                properties.workspace().allowedRoots(),
+                agentConfig
+        );
     }
 
     /** Usa DOCKER_HOST se definido; senão, o socket padrão (unix:///var/run/docker.sock). */
@@ -46,6 +59,7 @@ public class TocaConfig {
                 .dockerHost(config.getDockerHost())
                 .sslConfig(config.getSSLConfig())
                 .build();
+
         return DockerClientImpl.getInstance(config, http);
     }
 

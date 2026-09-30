@@ -52,7 +52,7 @@ public class TocaWebMapper {
         return tocas.stream().map(this::toResponse).toList();
     }
 
-    private Seed toSeed(SeedRequest seed) {
+    public Seed toSeed(SeedRequest seed) {
         return switch (seed.type()) {
             case SeedRequest.EXISTING -> new Seed.ExistingRepositories(this.toRepositories(seed.repositories()));
             case SeedRequest.NEW -> new Seed.NewProject(seed.name());

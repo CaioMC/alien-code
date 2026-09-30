@@ -10,6 +10,7 @@ import static java.util.Objects.isNull;
  * Configuração das Tocas, já sem nada de Spring.
  *
  * @param allowedRoots só repositórios dentro destas pastas podem ser semeados (a API aceita caminhos locais)
+ * @param agentConfig  configuração do opencode (JSON) entregue à Toca em OPENCODE_CONFIG_CONTENT; nula = padrão da imagem
  */
 public record TocaSettings(
         String image,
@@ -21,7 +22,8 @@ public record TocaSettings(
         long pidsLimit,
         Duration ttl,
         Duration readyTimeout,
-        List<Path> allowedRoots
+        List<Path> allowedRoots,
+        String agentConfig
 ) {
 
     public TocaSettings {
