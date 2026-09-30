@@ -14,6 +14,9 @@ import dev.aliencode.core.toca.domain.model.Seed;
 import dev.aliencode.core.toca.domain.model.Toca;
 import dev.aliencode.core.toca.usecase.command.ProvisionTocaCommand;
 
+import static java.util.Objects.isNull;
+import static java.util.Objects.nonNull;
+
 /**
  * Tradução entre o formato HTTP e o domínio. Os DTOs são só dados; toda a conversão
  * (e a validação de formato que ela exige) mora aqui, e as regras de negócio ficam no domínio.
@@ -24,9 +27,10 @@ public class TocaWebMapper {
     private static final int SHORT_CONTAINER_ID = 12;
 
     public ProvisionTocaCommand toCommand(ProvisionTocaRequest request) {
-        if (request == null || request.seed() == null || request.seed().type() == null) {
+        if (isNull(request) || isNull(request.seed()) || isNull(request.seed().type())) {
             throw new IllegalArgumentException("Informe seed.type: '" + SeedRequest.EXISTING + "' ou '" + SeedRequest.NEW + "'");
         }
+
         return new ProvisionTocaCommand(request.missionId(), this.toSeed(request.seed()));
     }
 
@@ -36,11 +40,12 @@ public class TocaWebMapper {
                 toca.missionId(),
                 toca.status().name(),
                 this.shortContainerId(toca.containerId()),
-                toca.endpoint() == null ? null : toca.endpoint().baseUrl().toString(),
+                isNull(toca.endpoint()) ? null : toca.endpoint().baseUrl().toString(),
                 toca.workspaceDirs(),
                 toca.createdAt(),
                 toca.expiresAt(),
-                toca.failureReason());
+                toca.failureReason()
+        );
     }
 
     public List<TocaResponse> toResponses(List<Toca> tocas) {
@@ -56,25 +61,32 @@ public class TocaWebMapper {
     }
 
     private List<RepositorySeed> toRepositories(List<RepositoryRequest> repositories) {
-        if (repositories == null) {
+        if (isNull(repositories)) {
             return List.of();
         }
+
         return repositories.stream().map(this::toRepository).toList();
     }
 
     private RepositorySeed toRepository(RepositoryRequest repository) {
-        if (repository.path() == null || repository.path().isBlank()) {
+        if (isNull(repository.path()) || repository.path().isBlank()) {
             throw new IllegalArgumentException("O repositório '" + repository.name() + "' precisa de path");
         }
+
         Path path = Path.of(repository.path());
-        String name = repository.name() != null ? repository.name() : String.valueOf(path.getFileName());
+        String name = nonNull(repository.name()) ? repository.name() : String.valueOf(path.getFileName());
+
         return new RepositorySeed(name, path, repository.ref());
     }
 
     private String shortContainerId(String containerId) {
-        if (containerId == null) {
+        if (isNull(containerId)) {
             return null;
         }
-        return containerId.substring(0, Math.min(SHORT_CONTAINER_ID, containerId.length()));
+
+        return containerId.substring(
+                0,
+                Math.min(SHORT_CONTAINER_ID, containerId.length())
+        );
     }
 }

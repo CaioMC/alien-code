@@ -7,5 +7,9 @@ package dev.aliencode.adapters.toca.web.request;
  * @param path caminho absoluto do repositório na máquina do dev
  * @param ref  branch, tag ou commit; se ausente, o HEAD atual
  */
-public record RepositoryRequest(String name, String path, String ref) {
+public record RepositoryRequest(
+        String name,
+        String path,
+        String ref
+) {
 }

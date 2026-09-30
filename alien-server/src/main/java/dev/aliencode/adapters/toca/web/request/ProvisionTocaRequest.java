@@ -7,5 +7,8 @@ package dev.aliencode.adapters.toca.web.request;
  * {"seed": {"type": "new", "name": "meu-projeto"}}
  * </pre>
  */
-public record ProvisionTocaRequest(String missionId, SeedRequest seed) {
+public record ProvisionTocaRequest(
+        String missionId,
+        SeedRequest seed
+) {
 }

@@ -28,10 +28,15 @@ public class TocaController {
     private final ProvisionTocaUseCase provision;
     private final DisposeTocaUseCase dispose;
     private final ListTocasUseCase list;
+
     private final TocaWebMapper mapper;
 
-    public TocaController(ProvisionTocaUseCase provision, DisposeTocaUseCase dispose, ListTocasUseCase list,
-                          TocaWebMapper mapper) {
+    public TocaController(
+            ProvisionTocaUseCase provision,
+            DisposeTocaUseCase dispose,
+            ListTocasUseCase list,
+            TocaWebMapper mapper
+    ) {
         this.provision = provision;
         this.dispose = dispose;
         this.list = list;
@@ -42,7 +47,11 @@ public class TocaController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public TocaResponse provision(@RequestBody ProvisionTocaRequest request) {
-        return this.mapper.toResponse(this.provision.provision(this.mapper.toCommand(request)));
+        return this.mapper.toResponse(
+                this.provision.provision(
+                        this.mapper.toCommand(request)
+                )
+        );
     }
 
     @GetMapping
@@ -52,11 +61,15 @@ public class TocaController {
 
     @GetMapping("/{id}")
     public TocaResponse get(@PathVariable String id) {
-        return this.mapper.toResponse(this.list.get(new TocaId(id)));
+        return this.mapper.toResponse(
+                this.list.get(new TocaId(id))
+        );
     }
 
     @DeleteMapping("/{id}")
     public TocaResponse dispose(@PathVariable String id) {
-        return this.mapper.toResponse(this.dispose.dispose(new TocaId(id)));
+        return this.mapper.toResponse(
+                this.dispose.dispose(new TocaId(id))
+        );
     }
 }

@@ -37,7 +37,8 @@ public class OpencodeHealthAdapter implements AgentHarnessPort {
 
     @Override
     public String awaitReady(TocaEndpoint endpoint, Duration timeout) {
-        HttpRequest request = HttpRequest.newBuilder(URI.create(endpoint.baseUrl() + "/global/health"))
+        HttpRequest request = HttpRequest
+                .newBuilder(URI.create(endpoint.baseUrl() + "/global/health"))
                 .header("Authorization", basicAuth(endpoint))
                 .timeout(Duration.ofSeconds(2))
                 .GET()
@@ -45,24 +46,31 @@ public class OpencodeHealthAdapter implements AgentHarnessPort {
 
         Instant deadline = Instant.now().plus(timeout);
         String lastProblem = "sem resposta";
+
         while (Instant.now().isBefore(deadline)) {
+
             try {
                 HttpResponse<String> response = this.http.send(request, HttpResponse.BodyHandlers.ofString());
+
                 if (response.statusCode() == 200) {
                     JsonNode body = this.json.readTree(response.body());
+
                     if (body.path("healthy").asBoolean(false)) {
                         return body.path("version").asText("desconhecida");
                     }
+
                     lastProblem = "healthy=false";
                 } else {
                     lastProblem = "HTTP " + response.statusCode();
                 }
+
             } catch (IOException e) {
                 lastProblem = e.getClass().getSimpleName();
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new HarnessNotReadyException("Interrompido esperando o opencode");
             }
+
             sleep();
         }
         throw new HarnessNotReadyException("O opencode não respondeu em " + timeout.toSeconds() + "s em "

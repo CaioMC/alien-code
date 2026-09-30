@@ -9,7 +9,11 @@ import java.util.List;
  * @param name         nome do projeto novo (só para {@code new})
  * @param repositories repositórios a copiar (só para {@code existing})
  */
-public record SeedRequest(String type, String name, List<RepositoryRequest> repositories) {
+public record SeedRequest(
+        String type,
+        String name,
+        List<RepositoryRequest> repositories
+) {
 
     public static final String EXISTING = "existing";
     public static final String NEW = "new";

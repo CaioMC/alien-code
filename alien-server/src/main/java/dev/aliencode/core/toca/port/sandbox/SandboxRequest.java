@@ -4,6 +4,8 @@ import java.util.Map;
 
 import dev.aliencode.core.toca.domain.model.TocaId;
 
+import static java.util.Objects.isNull;
+
 /**
  * Tudo que o adaptador de containers precisa para criar uma Toca.
  *
@@ -25,7 +27,7 @@ public record SandboxRequest(
         Map<String, String> labels) {
 
     public SandboxRequest {
-        env = env == null ? Map.of() : Map.copyOf(env);
-        labels = labels == null ? Map.of() : Map.copyOf(labels);
+        env = isNull(env) ? Map.of() : Map.copyOf(env);
+        labels = isNull(labels) ? Map.of() : Map.copyOf(labels);
     }
 }

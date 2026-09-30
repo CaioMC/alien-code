@@ -33,6 +33,8 @@ import dev.aliencode.core.toca.port.workspace.WorkspaceSnapshotPort;
 import dev.aliencode.core.toca.usecase.ProvisionTocaUseCase;
 import dev.aliencode.core.toca.usecase.command.ProvisionTocaCommand;
 
+import static java.util.Objects.nonNull;
+
 /**
  * Passos 1 a 3 do ciclo de vida da Toca (especificação, seção 5):
  * <ol>
@@ -46,6 +48,7 @@ import dev.aliencode.core.toca.usecase.command.ProvisionTocaCommand;
 public class ProvisionTocaService implements ProvisionTocaUseCase {
 
     private static final Logger log = LoggerFactory.getLogger(ProvisionTocaService.class);
+
     private static final String WORKSPACE = "/workspace";
     private static final Duration GIT_INIT_TIMEOUT = Duration.ofSeconds(30);
 
@@ -53,12 +56,19 @@ public class ProvisionTocaService implements ProvisionTocaUseCase {
     private final WorkspaceSnapshotPort snapshots;
     private final AgentHarnessPort harness;
     private final TocaRepository tocas;
-    private final TocaSettings settings;
     private final Clock clock;
+
+    private final TocaSettings settings;
     private final SecureRandom random = new SecureRandom();
 
-    public ProvisionTocaService(SandboxPort sandbox, WorkspaceSnapshotPort snapshots, AgentHarnessPort harness,
-                                TocaRepository tocas, TocaSettings settings, Clock clock) {
+    public ProvisionTocaService(
+            SandboxPort sandbox,
+            WorkspaceSnapshotPort snapshots,
+            AgentHarnessPort harness,
+            TocaRepository tocas,
+            TocaSettings settings,
+            Clock clock
+    ) {
         this.sandbox = sandbox;
         this.snapshots = snapshots;
         this.harness = harness;
@@ -72,16 +82,28 @@ public class ProvisionTocaService implements ProvisionTocaUseCase {
         this.validateSeed(command.seed());
 
         Instant now = this.clock.instant();
-        Toca toca = Toca.provisioning(TocaId.newId(), command.missionId(), now, now.plus(this.settings.ttl()));
+
+        Toca toca = Toca.provisioning(
+                TocaId.newId(),
+                command.missionId(),
+                now,
+                now.plus(this.settings.ttl())
+        );
+
         this.tocas.save(toca);
         log.info("Provisionando {} (missão {})", toca.id(), command.missionId());
 
         try {
             String password = this.newPassword();
+
             SandboxHandle handle = this.sandbox.create(this.sandboxRequest(toca, password));
+
             TocaEndpoint endpoint = new TocaEndpoint(
                     URI.create("http://" + handle.agentHost() + ":" + handle.agentPort()),
-                    this.settings.agentUsername(), password);
+                    this.settings.agentUsername(),
+                    password
+            );
+
             toca = toca.withContainer(handle.containerId(), endpoint);
             this.tocas.save(toca);
 
@@ -90,26 +112,30 @@ public class ProvisionTocaService implements ProvisionTocaUseCase {
 
             toca = toca.ready(dirs);
             this.tocas.save(toca);
+
             log.info("{} pronta: container {}, opencode {}, workspace {}", toca.id(), toca.containerId(), version, dirs);
             return toca;
         } catch (RuntimeException e) {
             Toca failed = toca.failed(e.getMessage());
+
             if (failed.hasContainer()) {
                 this.removeQuietly(failed.containerId());
             }
+
             this.tocas.save(failed);
             log.warn("Falha ao provisionar {}: {}", failed.id(), e.getMessage());
+
             throw new TocaProvisioningException(failed, e);
         }
     }
 
     private void validateSeed(Seed seed) {
-        if (seed instanceof Seed.ExistingRepositories existing) {
-            for (RepositorySeed repository : existing.repositories()) {
+        if (seed instanceof Seed.ExistingRepositories(List<RepositorySeed> repositories)) {
+            for (RepositorySeed repository : repositories) {
                 if (!this.settings.isAllowed(repository.path())) {
-                    throw new IllegalArgumentException("O repositório " + repository.path()
-                            + " está fora das pastas permitidas (alien.workspace.allowed-roots)");
+                    throw new IllegalArgumentException("O repositório " + repository.path() + " está fora das pastas permitidas (alien.workspace.allowed-roots)");
                 }
+
                 if (!Files.isDirectory(repository.path())) {
                     throw new IllegalArgumentException("Repositório não encontrado: " + repository.path());
                 }
@@ -119,18 +145,30 @@ public class ProvisionTocaService implements ProvisionTocaUseCase {
 
     private SandboxRequest sandboxRequest(Toca toca, String password) {
         Map<String, String> env = new HashMap<>();
+
         env.put("OPENCODE_SERVER_PASSWORD", password);
         env.put("OPENCODE_SERVER_USERNAME", this.settings.agentUsername());
         env.put("OPENCODE_PORT", String.valueOf(this.settings.agentPort()));
 
         Map<String, String> labels = new HashMap<>();
+
         labels.put("alien.expires-at", toca.expiresAt().toString());
-        if (toca.missionId() != null) {
+
+        if (nonNull(toca.missionId())) {
             labels.put("alien.mission", toca.missionId());
         }
-        return new SandboxRequest(toca.id(), this.settings.image(), this.settings.network(),
-                this.settings.agentPort(), this.settings.memoryBytes(), this.settings.nanoCpus(),
-                this.settings.pidsLimit(), env, labels);
+
+        return new SandboxRequest(
+                toca.id(),
+                this.settings.image(),
+                this.settings.network(),
+                this.settings.agentPort(),
+                this.settings.memoryBytes(),
+                this.settings.nanoCpus(),
+                this.settings.pidsLimit(),
+                env,
+                labels
+        );
     }
 
     private List<String> seed(Toca toca, Seed seed) {
@@ -142,11 +180,15 @@ public class ProvisionTocaService implements ProvisionTocaUseCase {
 
     private List<String> seedRepositories(Toca toca, List<RepositorySeed> repositories) {
         List<String> dirs = new ArrayList<>();
+
         for (RepositorySeed repository : repositories) {
             Path snapshot = this.snapshots.snapshot(repository);
+
             try {
                 String target = WORKSPACE + "/" + repository.name();
+
                 this.sandbox.copyDirectory(toca.containerId(), snapshot, target);
+
                 dirs.add(target);
             } finally {
                 this.snapshots.discard(snapshot);
@@ -157,11 +199,13 @@ public class ProvisionTocaService implements ProvisionTocaUseCase {
 
     private List<String> seedNewProject(Toca toca, String name) {
         String target = WORKSPACE + "/" + name;
-        ExecResult result = this.sandbox.exec(toca.containerId(), List.of("git", "init", "-q", target),
-                GIT_INIT_TIMEOUT);
+
+        ExecResult result = this.sandbox.exec(toca.containerId(), List.of("git", "init", "-q", target), GIT_INIT_TIMEOUT);
+
         if (!result.succeeded()) {
             throw new IllegalStateException("git init falhou na Toca: " + result.stderr().strip());
         }
+
         return List.of(target);
     }
 
@@ -175,7 +219,9 @@ public class ProvisionTocaService implements ProvisionTocaUseCase {
 
     private String newPassword() {
         byte[] bytes = new byte[24];
+
         this.random.nextBytes(bytes);
+
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 }

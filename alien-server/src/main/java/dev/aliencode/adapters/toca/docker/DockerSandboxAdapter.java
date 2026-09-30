@@ -37,6 +37,9 @@ import dev.aliencode.core.toca.port.sandbox.SandboxHandle;
 import dev.aliencode.core.toca.port.sandbox.SandboxPort;
 import dev.aliencode.core.toca.port.sandbox.SandboxRequest;
 
+import static java.util.Objects.isNull;
+import static java.util.Objects.nonNull;
+
 /**
  * Tocas como containers Docker. Cada container nasce com:
  * limites de CPU/memória/processos, todas as capabilities removidas, no-new-privileges,
@@ -71,12 +74,15 @@ public class DockerSandboxAdapter implements SandboxPort {
                 .withCapDrop(Capability.ALL)
                 .withSecurityOpts(List.of("no-new-privileges"))
                 .withInit(true);
+
         if (request.memoryBytes() > 0) {
             hostConfig.withMemory(request.memoryBytes());
         }
+
         if (request.nanoCpus() > 0) {
             hostConfig.withNanoCPUs(request.nanoCpus());
         }
+
         if (request.pidsLimit() > 0) {
             hostConfig.withPidsLimit(request.pidsLimit());
         }
@@ -84,18 +90,22 @@ public class DockerSandboxAdapter implements SandboxPort {
         Map<String, String> labels = new HashMap<>(request.labels());
         labels.put(LABEL_TOCA, request.tocaId().value());
 
-        String containerId = this.docker.createContainerCmd(request.image())
-                .withName(request.tocaId().value())
-                .withEnv(request.env().entrySet().stream().map(e -> e.getKey() + "=" + e.getValue()).toList())
-                .withLabels(labels)
-                .withExposedPorts(agentPort)
-                .withHostConfig(hostConfig)
-                .exec()
-                .getId();
+        String containerId = null;
         try {
+            containerId = this.docker.createContainerCmd(request.image())
+                    .withName(request.tocaId().value())
+                    .withEnv(request.env().entrySet().stream().map(e -> e.getKey() + "=" + e.getValue()).toList())
+                    .withLabels(labels)
+                    .withExposedPorts(agentPort)
+                    .withHostConfig(hostConfig)
+                    .exec()
+                    .getId();
+
             this.docker.startContainerCmd(containerId).exec();
+
             int hostPort = this.publishedPort(containerId, agentPort);
             log.debug("Container {} de {} publicado em {}:{}", containerId, request.tocaId(), LOOPBACK, hostPort);
+
             return new SandboxHandle(containerId, LOOPBACK, hostPort);
         } catch (RuntimeException e) {
             this.remove(containerId);
@@ -106,10 +116,13 @@ public class DockerSandboxAdapter implements SandboxPort {
     @Override
     public void copyDirectory(String containerId, Path source, String targetDir) {
         Path target = Path.of(targetDir);
-        if (target.getParent() == null || target.getFileName() == null) {
+
+        if (isNull(target.getParent()) || isNull(target.getFileName())) {
             throw new IllegalArgumentException("Destino inválido na Toca: " + targetDir);
         }
+
         Path tar = TarArchiver.archive(source, target.getFileName().toString(), TOCA_UID, TOCA_GID);
+
         try (InputStream in = Files.newInputStream(tar)) {
             this.docker.copyArchiveToContainerCmd(containerId)
                     .withRemotePath(target.getParent().toString())
@@ -132,6 +145,7 @@ public class DockerSandboxAdapter implements SandboxPort {
 
         StringBuilder stdout = new StringBuilder();
         StringBuilder stderr = new StringBuilder();
+
         try (ResultCallback.Adapter<Frame> callback = new ResultCallback.Adapter<>() {
             @Override
             public void onNext(Frame frame) {
@@ -140,6 +154,7 @@ public class DockerSandboxAdapter implements SandboxPort {
             }
         }) {
             this.docker.execStartCmd(created.getId()).exec(callback);
+
             if (!callback.awaitCompletion(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
                 throw new IllegalStateException("Comando excedeu " + timeout + " na Toca: " + String.join(" ", command));
             }
@@ -151,11 +166,15 @@ public class DockerSandboxAdapter implements SandboxPort {
         }
 
         Long exitCode = this.docker.inspectExecCmd(created.getId()).exec().getExitCodeLong();
-        return new ExecResult(exitCode == null ? -1 : exitCode.intValue(), stdout.toString(), stderr.toString());
+        return new ExecResult(isNull(exitCode) ? -1 : exitCode.intValue(), stdout.toString(), stderr.toString());
     }
 
     @Override
     public void remove(String containerId) {
+        if (isNull(containerId)) {
+            return;
+        }
+
         try {
             this.docker.removeContainerCmd(containerId).withForce(true).withRemoveVolumes(true).exec();
         } catch (NotFoundException e) {
@@ -166,10 +185,12 @@ public class DockerSandboxAdapter implements SandboxPort {
     @Override
     public List<ManagedSandbox> listManaged() {
         List<ManagedSandbox> managed = new ArrayList<>();
+
         for (Container container : this.docker.listContainersCmd()
                 .withShowAll(true)
                 .withLabelFilter(List.of(LABEL_TOCA))
                 .exec()) {
+
             managed.add(new ManagedSandbox(container.getId(), container.getLabels().get(LABEL_TOCA)));
         }
         return managed;
@@ -179,20 +200,20 @@ public class DockerSandboxAdapter implements SandboxPort {
         try {
             this.docker.inspectImageCmd(image).exec();
         } catch (NotFoundException e) {
-            throw new IllegalStateException("Imagem da Toca não encontrada: " + image
-                    + ". Construa com: docker build -t " + image + " toca/", e);
+            throw new IllegalStateException("Imagem da Toca não encontrada: " + image + ". Construa com: docker build -t " + image + " toca/", e);
         }
     }
 
     private void ensureNetwork(String network) {
-        boolean exists = this.docker.listNetworksCmd().withNameFilter(network).exec().stream()
-                .anyMatch(n -> network.equals(n.getName()));
+        boolean exists = this.docker.listNetworksCmd().withNameFilter(network).exec().stream().anyMatch(n -> network.equals(n.getName()));
+
         if (!exists) {
             this.docker.createNetworkCmd()
                     .withName(network)
                     .withDriver("bridge")
                     .withLabels(Map.of("alien.managed", "true"))
                     .exec();
+
             log.info("Rede Docker {} criada", network);
         }
     }
@@ -201,15 +222,18 @@ public class DockerSandboxAdapter implements SandboxPort {
         for (int attempt = 0; attempt < 20; attempt++) {
             InspectContainerResponse inspect = this.docker.inspectContainerCmd(containerId).exec();
             Ports.Binding[] bindings = inspect.getNetworkSettings().getPorts().getBindings().get(port);
-            if (bindings != null && bindings.length > 0 && bindings[0].getHostPortSpec() != null) {
+
+            if (nonNull(bindings) && bindings.length > 0 && nonNull(bindings[0].getHostPortSpec())) {
                 return Integer.parseInt(bindings[0].getHostPortSpec());
             }
+
             if (Boolean.FALSE.equals(inspect.getState().getRunning())) {
-                throw new IllegalStateException("O container da Toca parou logo ao iniciar (exit "
-                        + inspect.getState().getExitCodeLong() + ")");
+                throw new IllegalStateException("O container da Toca parou logo ao iniciar (exit " + inspect.getState().getExitCodeLong() + ")");
             }
+
             sleep(Duration.ofMillis(100));
         }
+
         throw new IllegalStateException("O Docker não publicou a porta " + port + " do container " + containerId);
     }
 

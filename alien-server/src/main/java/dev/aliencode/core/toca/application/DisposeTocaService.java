@@ -28,15 +28,20 @@ public class DisposeTocaService implements DisposeTocaUseCase {
     @Override
     public Toca dispose(TocaId id) {
         Toca toca = this.tocas.findById(id).orElseThrow(() -> new TocaNotFoundException(id));
+
         if (!toca.status().isActive()) {
             return toca;
         }
+
         if (toca.hasContainer()) {
             this.sandbox.remove(toca.containerId());
         }
+
         Toca disposed = toca.disposed();
+
         this.tocas.save(disposed);
         log.info("{} descartada", id);
+
         return disposed;
     }
 }

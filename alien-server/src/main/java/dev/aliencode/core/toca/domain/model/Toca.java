@@ -3,6 +3,9 @@ package dev.aliencode.core.toca.domain.model;
 import java.time.Instant;
 import java.util.List;
 
+import static java.util.Objects.isNull;
+import static java.util.Objects.nonNull;
+
 /**
  * O ambiente efêmero de uma missão: um container com opencode e o workspace semeado.
  * Imutável; cada transição devolve uma nova instância.
@@ -16,42 +19,101 @@ public record Toca(
         List<String> workspaceDirs,
         Instant createdAt,
         Instant expiresAt,
-        String failureReason) {
+        String failureReason
+) {
 
     public Toca {
-        if (id == null || status == null || createdAt == null || expiresAt == null) {
+        if (isNull(id) || isNull(status) || isNull(createdAt) || isNull(expiresAt)) {
             throw new IllegalArgumentException("Toca incompleta");
         }
-        workspaceDirs = workspaceDirs == null ? List.of() : List.copyOf(workspaceDirs);
+
+        workspaceDirs = isNull(workspaceDirs) ? List.of() : List.copyOf(workspaceDirs);
     }
 
-    public static Toca provisioning(TocaId id, String missionId, Instant now, Instant expiresAt) {
-        return new Toca(id, missionId, TocaStatus.PROVISIONING, null, null, List.of(), now, expiresAt, null);
+    public static Toca provisioning(
+            TocaId id,
+            String missionId,
+            Instant now,
+            Instant expiresAt
+    ) {
+        return new Toca(
+                id,
+                missionId,
+                TocaStatus.PROVISIONING,
+                null,
+                null,
+                List.of(),
+                now,
+                expiresAt,
+                null
+        );
     }
 
-    public Toca withContainer(String containerId, TocaEndpoint endpoint) {
+    public Toca withContainer(
+            String containerId,
+            TocaEndpoint endpoint
+    ) {
         this.requireStatus(TocaStatus.PROVISIONING);
-        return new Toca(this.id, this.missionId, this.status, containerId, endpoint, this.workspaceDirs,
-                this.createdAt, this.expiresAt, null);
+
+        return new Toca(
+                this.id,
+                this.missionId,
+                this.status,
+                containerId,
+                endpoint,
+                this.workspaceDirs,
+                this.createdAt,
+                this.expiresAt,
+                null
+        );
     }
 
     public Toca ready(List<String> workspaceDirs) {
         this.requireStatus(TocaStatus.PROVISIONING);
-        if (this.containerId == null) {
+
+        if (isNull(this.containerId)) {
             throw new IllegalStateException("A Toca " + this.id + " não pode ficar pronta sem container");
         }
-        return new Toca(this.id, this.missionId, TocaStatus.READY, this.containerId, this.endpoint, workspaceDirs,
-                this.createdAt, this.expiresAt, null);
+
+        return new Toca(
+                this.id,
+                this.missionId,
+                TocaStatus.READY,
+                this.containerId,
+                this.endpoint,
+                workspaceDirs,
+                this.createdAt,
+                this.expiresAt,
+                null
+        );
     }
 
     public Toca failed(String reason) {
-        return new Toca(this.id, this.missionId, TocaStatus.FAILED, this.containerId, this.endpoint,
-                this.workspaceDirs, this.createdAt, this.expiresAt, reason);
+        return new Toca(
+                this.id,
+                this.missionId,
+                TocaStatus.FAILED,
+                this.containerId,
+                this.endpoint,
+                this.workspaceDirs,
+                this.createdAt,
+                this.expiresAt,
+                reason
+        );
     }
 
     public Toca disposed() {
-        return new Toca(this.id, this.missionId, TocaStatus.DISPOSED, this.containerId, this.endpoint,
-                this.workspaceDirs, this.createdAt, this.expiresAt, this.failureReason);
+        return new Toca(
+                this.id,
+                this.missionId,
+                TocaStatus.DISPOSED,
+                this.containerId,
+                this.endpoint,
+                this.workspaceDirs,
+                this.createdAt,
+                this.expiresAt,
+                this.failureReason
+        );
     }
 
     public boolean isExpired(Instant now) {
@@ -59,13 +121,12 @@ public record Toca(
     }
 
     public boolean hasContainer() {
-        return this.containerId != null;
+        return nonNull(this.containerId);
     }
 
     private void requireStatus(TocaStatus expected) {
         if (this.status != expected) {
-            throw new IllegalStateException(
-                    "A Toca " + this.id + " está em " + this.status + ", esperado " + expected);
+            throw new IllegalStateException("A Toca " + this.id + " está em " + this.status + ", esperado " + expected);
         }
     }
 }

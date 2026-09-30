@@ -3,6 +3,8 @@ package dev.aliencode.core.toca.domain.model;
 import java.util.HashSet;
 import java.util.List;
 
+import static java.util.Objects.isNull;
+
 /** O que a Toca recebe em /workspace ao ser criada. */
 public sealed interface Seed {
 
@@ -10,11 +12,14 @@ public sealed interface Seed {
     record ExistingRepositories(List<RepositorySeed> repositories) implements Seed {
 
         public ExistingRepositories {
-            if (repositories == null || repositories.isEmpty()) {
+            if (isNull(repositories) || repositories.isEmpty()) {
                 throw new IllegalArgumentException("Informe ao menos um repositório para semear a Toca");
             }
+
             repositories = List.copyOf(repositories);
+
             var names = new HashSet<String>();
+
             for (RepositorySeed repository : repositories) {
                 if (!names.add(repository.name())) {
                     throw new IllegalArgumentException("Nome de repositório repetido: " + repository.name());
@@ -27,7 +32,7 @@ public sealed interface Seed {
     record NewProject(String name) implements Seed {
 
         public NewProject {
-            if (name == null || !RepositorySeed.NAME.matcher(name).matches()) {
+            if (isNull(name) || !RepositorySeed.PATTERN.matcher(name).matches()) {
                 throw new IllegalArgumentException("Nome de projeto inválido: '" + name + "'");
             }
         }

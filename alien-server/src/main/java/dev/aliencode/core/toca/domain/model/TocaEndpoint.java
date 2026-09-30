@@ -2,6 +2,8 @@ package dev.aliencode.core.toca.domain.model;
 
 import java.net.URI;
 
+import static java.util.Objects.isNull;
+
 /**
  * Como o Alien Server alcança o opencode que roda dentro da Toca.
  * A senha é gerada por Toca e nunca sai do servidor (não aparece na API REST).
@@ -9,10 +11,10 @@ import java.net.URI;
 public record TocaEndpoint(URI baseUrl, String username, String password) {
 
     public TocaEndpoint {
-        if (baseUrl == null) {
+        if (isNull(baseUrl)) {
             throw new IllegalArgumentException("O endpoint da Toca precisa de uma URL");
         }
-        if (password == null || password.isBlank()) {
+        if (isNull(password) || password.isBlank()) {
             throw new IllegalArgumentException("O endpoint da Toca precisa de uma senha");
         }
     }

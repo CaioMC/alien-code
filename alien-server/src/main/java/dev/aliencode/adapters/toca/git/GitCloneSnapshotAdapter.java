@@ -18,6 +18,9 @@ import org.springframework.stereotype.Component;
 import dev.aliencode.core.toca.domain.model.RepositorySeed;
 import dev.aliencode.core.toca.port.workspace.WorkspaceSnapshotPort;
 
+import static java.util.Objects.isNull;
+import static java.util.Objects.nonNull;
+
 /**
  * Snapshot com {@code git clone --local --no-hardlinks}: cópia independente do repositório,
  * no commit pedido, sem o remote apontando para a máquina do dev.
@@ -57,7 +60,7 @@ public class GitCloneSnapshotAdapter implements WorkspaceSnapshotPort {
         command.addAll(List.of(args));
         ProcessBuilder builder = new ProcessBuilder(command).redirectErrorStream(true);
         builder.environment().put("GIT_TERMINAL_PROMPT", "0");
-        if (workdir != null) {
+        if (nonNull(workdir)) {
             builder.directory(workdir.toFile());
         }
         try {
@@ -87,7 +90,7 @@ public class GitCloneSnapshotAdapter implements WorkspaceSnapshotPort {
     }
 
     private static void deleteRecursively(Path dir) {
-        if (dir == null || !Files.exists(dir)) {
+        if (isNull(dir) || !Files.exists(dir)) {
             return;
         }
         try (Stream<Path> walk = Files.walk(dir)) {

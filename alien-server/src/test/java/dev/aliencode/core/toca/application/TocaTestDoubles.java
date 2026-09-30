@@ -21,6 +21,8 @@ import dev.aliencode.core.toca.port.sandbox.SandboxPort;
 import dev.aliencode.core.toca.port.sandbox.SandboxRequest;
 import dev.aliencode.core.toca.port.workspace.WorkspaceSnapshotPort;
 
+import static java.util.Objects.nonNull;
+
 /** Dublês simples das portas da Toca, com registro do que foi chamado. */
 final class TocaTestDoubles {
 
@@ -45,7 +47,7 @@ final class TocaTestDoubles {
 
         @Override
         public void copyDirectory(String containerId, Path source, String targetDir) {
-            if (this.failOnCopy != null) {
+            if (nonNull(this.failOnCopy)) {
                 throw this.failOnCopy;
             }
             this.copiedTo.add(targetDir);
