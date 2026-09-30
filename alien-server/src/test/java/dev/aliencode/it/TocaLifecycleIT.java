@@ -1,9 +1,5 @@
 package dev.aliencode.it;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
-
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -41,6 +37,10 @@ import dev.aliencode.core.toca.port.sandbox.ExecResult;
 import dev.aliencode.core.toca.port.sandbox.SandboxPort;
 import dev.aliencode.core.toca.port.sandbox.SandboxRequest;
 import dev.aliencode.core.toca.usecase.ReapTocasUseCase;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * Critério de pronto do M0: o Alien Server cria uma Toca real (imagem alien/toca),
@@ -89,13 +89,19 @@ class TocaLifecycleIT {
     void criaSemeiaIsolaEDestroiUmaTocaComRepositorioExistente() throws Exception {
         Path repo = gitRepository("demo");
 
-        ResponseEntity<TocaResponse> response = this.rest.postForEntity("/api/tocas", Map.of("missionId", "m-it",
-                "seed", Map.of("type", "existing", "repositories", List.of(Map.of("path", repo.toString())))),
-                TocaResponse.class);
+        Map<String, Object> request = Map.of(
+                "missionId", "m-it",
+                "seed", Map.of("type", "existing", "repositories", List.of(Map.of("path", repo.toString())))
+        );
+
+        ResponseEntity<TocaResponse> response = this.rest.postForEntity("/api/tocas", request, TocaResponse.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+
         TocaResponse toca = response.getBody();
+
         this.created.add(toca.id());
+
         assertThat(toca.status()).isEqualTo("READY");
         assertThat(toca.workspace()).containsExactly("/workspace/demo");
 
@@ -124,31 +130,42 @@ class TocaLifecycleIT {
         // o opencode está no ar e exige a senha da Toca
         HttpResponse<String> semSenha = HttpClient.newHttpClient().send(
                 HttpRequest.newBuilder(URI.create(toca.agentUrl() + "/global/health")).build(),
-                HttpResponse.BodyHandlers.ofString());
+                HttpResponse.BodyHandlers.ofString()
+        );
+
         assertThat(semSenha.statusCode()).isEqualTo(401);
 
         // descarte
         this.rest.delete("/api/tocas/" + toca.id());
+
         assertThat(this.rest.getForObject("/api/tocas/" + toca.id(), TocaResponse.class).status()).isEqualTo("DISPOSED");
         assertThatThrownBy(() -> this.docker.inspectContainerCmd(containerId).exec()).isInstanceOf(NotFoundException.class);
     }
 
     @Test
     void criaProjetoNovo() {
-        TocaResponse toca = this.rest.postForObject("/api/tocas",
-                Map.of("seed", Map.of("type", "new", "name", "novo")), TocaResponse.class);
+        TocaResponse toca = this.rest.postForObject(
+                "/api/tocas",
+                Map.of("seed", Map.of("type", "new", "name", "novo")),
+                TocaResponse.class
+        );
+
         this.created.add(toca.id());
 
         assertThat(toca.status()).isEqualTo("READY");
+
         String containerId = this.docker.inspectContainerCmd(toca.id()).exec().getId();
+
         assertThat(this.exec(containerId, "test", "-d", "/workspace/novo/.git").succeeded()).isTrue();
     }
 
     @Test
     void recusaRepositorioForaDasPastasPermitidas() {
-        ResponseEntity<String> response = this.rest.postForEntity("/api/tocas",
+        ResponseEntity<String> response = this.rest.postForEntity(
+                "/api/tocas",
                 Map.of("seed", Map.of("type", "existing", "repositories", List.of(Map.of("path", "/etc")))),
-                String.class);
+                String.class
+        );
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     }
@@ -156,10 +173,22 @@ class TocaLifecycleIT {
     @Test
     void faxineiroRemoveContainerOrfao() {
         TocaId orphan = TocaId.newId();
-        String containerId = this.sandbox.create(new SandboxRequest(orphan, IMAGE, "alien-net", 4096, 0, 0, 0,
-                Map.of("OPENCODE_SERVER_PASSWORD", "x"), Map.of())).containerId();
+        SandboxRequest request = new SandboxRequest(
+                orphan,
+                IMAGE,
+                "alien-net",
+                4096,
+                0,
+                0,
+                0,
+                Map.of("OPENCODE_SERVER_PASSWORD", "x"),
+                Map.of()
+        );
+
+        String containerId = this.sandbox.create(request).containerId();
 
         assertThat(this.reap.removeOrphans()).contains(containerId);
+
         assertThatThrownBy(() -> this.docker.inspectContainerCmd(containerId).exec()).isInstanceOf(NotFoundException.class);
     }
 
@@ -169,12 +198,17 @@ class TocaLifecycleIT {
 
     private static Path gitRepository(String name) throws IOException, InterruptedException {
         Path repo = Files.createDirectories(root.resolve(name));
+
         Files.writeString(repo.resolve("README.md"), "olá, Toca");
+
         Path script = Files.writeString(repo.resolve("build.sh"), "#!/bin/sh\necho ok\n");
+
         Files.setPosixFilePermissions(script, PosixFilePermissions.fromString("rwxr-xr-x"));
+
         run(repo, "git", "init", "-q", "-b", "main");
         run(repo, "git", "add", ".");
         run(repo, "git", "-c", "user.name=it", "-c", "user.email=it@it", "commit", "-q", "-m", "primeiro commit");
+
         return repo;
     }
 

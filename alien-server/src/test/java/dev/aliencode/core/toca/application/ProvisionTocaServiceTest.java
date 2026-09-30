@@ -1,8 +1,5 @@
 package dev.aliencode.core.toca.application;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -28,6 +25,9 @@ import dev.aliencode.core.toca.domain.model.TocaStatus;
 import dev.aliencode.core.toca.port.sandbox.ExecResult;
 import dev.aliencode.core.toca.port.sandbox.SandboxRequest;
 import dev.aliencode.core.toca.usecase.command.ProvisionTocaCommand;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ProvisionTocaServiceTest {
 
@@ -130,9 +130,11 @@ class ProvisionTocaServiceTest {
     void falhaNaCopiaAindaDescartaOSnapshot() throws IOException {
         this.sandbox.failOnCopy = new IllegalStateException("disco cheio");
 
-        assertThatThrownBy(() -> this.service.provision(
-                new ProvisionTocaCommand(null, new Seed.ExistingRepositories(List.of(this.repo("api"))))))
+        Seed seed = new Seed.ExistingRepositories(List.of(this.repo("api")));
+
+        assertThatThrownBy(() -> this.service.provision(new ProvisionTocaCommand(null, seed)))
                 .isInstanceOf(TocaProvisioningException.class);
+
         assertThat(this.snapshots.discarded).hasSize(1);
         assertThat(this.sandbox.removed).hasSize(1);
     }
