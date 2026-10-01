@@ -1,63 +1,113 @@
-# Alien Code
+<p align="center">
+  <img src="alien-web/public/alien.svg" alt="Alien Code" width="120" />
+</p>
 
-Assistente de codificação local: sobe um ambiente efêmero (a **Toca**, um container Docker) com o
-projeto existente ou um projeto novo, executa o agente **opencode** com modelos abertos do **Ollama**
-e mostra cada passo da execução ao vivo — no estilo do Manus e do Claude Code Web.
+<h1 align="center">Alien Code</h1>
 
-É a V2 do estudo iniciado em `poc-websocket-demo` (assistente) e `coding-agent` (agente codificador).
+<p align="center">
+  Assistente de codificação <b>local</b>: um agente que trabalha nos seus repositórios dentro de um
+  container descartável, com cada passo transmitido ao vivo.
+</p>
 
-## Estado atual: marco M1 (timeline ao vivo)
+<p align="center">
+  <img alt="Java 21" src="https://img.shields.io/badge/Java-21-orange" />
+  <img alt="Spring Boot" src="https://img.shields.io/badge/Spring%20Boot-3-6db33f" />
+  <img alt="React" src="https://img.shields.io/badge/React-19-61dafb" />
+  <img alt="opencode" src="https://img.shields.io/badge/opencode-1.18.33-black" />
+  <img alt="Ollama" src="https://img.shields.io/badge/Ollama-qwen3:8b-white" />
+  <img alt="Marco" src="https://img.shields.io/badge/marco-M1-7ee787" />
+</p>
 
-| Marco | Situação |
-|---|---|
-| **M0 · Esqueleto** — imagem da Toca com opencode; o Alien Server cria, semeia e destrói Tocas | ✅ |
-| **M1 · Timeline ao vivo** — missão com 1 repo e 1 tarefa; eventos do opencode → WebSocket → UI | ✅ |
-| M2 · Entrega segura · M3 · Grafo · M4 · Multi-repo + DAG · M5 · AI-DLC completo | planejado |
+---
 
-O que já funciona:
+## 1. O que é
 
-- **Imagem `alien/toca`** ([`toca/`](toca/)): JDK 21, Maven, Node, git e **opencode 1.18.33** em modo
-  servidor, usuário sem privilégios (`alien`, uid 1000), senha obrigatória.
-- **Alien Server** ([`alien-server/`](alien-server/)), Java 21 + Spring Boot, em Clean Architecture:
-  - cria a Toca com limites de CPU, memória e processos, sem capabilities, com `no-new-privileges`
-    e a porta do opencode publicada só em `127.0.0.1`;
-  - semeia `/workspace` com cópias (`git clone --local`, sem remote) de um ou mais repositórios
-    locais, ou com um projeto novo (`git init`). O repositório original nunca é montado;
-  - espera o opencode responder (`GET /global/health`) antes de declarar a Toca pronta;
-  - descarta a Toca ao pedido, ao vencer o TTL (60 min) ou, se sobrar container órfão, quando o
-    servidor sobe de novo.
-- **Missões (M1)**: `POST /api/missions` abre uma missão com um pedido e um repositório (ou projeto
-  novo). O servidor provisiona a Toca, abre uma sessão do opencode com a tarefa e transforma o
-  fluxo SSE do opencode em eventos da timeline (raciocínio, texto, tool calls, terminal, diffs,
-  tokens), gravados em ordem num Event Store SQLite e entregues por WebSocket. Reconectar com
-  `lastSeq` reenvia só o que faltou; **Parar** aborta a sessão; ao fim, a Toca é descartada.
-- **Alien Web** ([`alien-web/`](alien-web/)), React + TypeScript + Vite: abre missões, mostra a
-  timeline ao vivo (passos, raciocínio recolhível, tool calls como sub-linhas com duração e saída),
-  as abas Terminal e Diff, tokens gastos e o botão **Parar** (ou `Esc`). Se a conexão cair, ele
-  reconecta sozinho com o último `seq` recebido.
+Você descreve uma tarefa ("corrija a função soma e rode os testes") e aponta um repositório. O Alien Code:
 
-## Como rodar
+1. sobe a **Toca**, um container Docker isolado, com uma **cópia** do repositório (o original nunca é tocado);
+2. coloca o agente **opencode** para trabalhar nela, usando um modelo aberto do **Ollama**;
+3. mostra **ao vivo** tudo o que o agente faz: raciocínio, comandos, saída do terminal, diffs e tokens;
+4. descarta a Toca no fim.
 
-Pré-requisitos: Docker (com Compose), Java 21, Maven e git.
+**Objetivo:** estudar e construir, por marcos, um agente de código no estilo do Manus e do Claude
+Code Web, 100% local, seguro (sandbox) e observável (timeline de eventos). É a V2 do estudo iniciado
+em `poc-websocket-demo` (assistente) e `coding-agent` (agente codificador).
+
+---
+
+## 2. Visão geral
+
+```mermaid
+flowchart LR
+    W["🖥️ <b>Alien Web</b><br/>a tela"]
+    S["👽 <b>Alien Server</b><br/>o orquestrador"]
+    O["🛠️ <b>opencode</b><br/>o harness"]
+    M["🧠 <b>Modelo</b><br/>o cérebro"]
+
+    W -- "REST + WebSocket" --> S
+    S -- "HTTP (comandos)<br/>SSE (narração)" --> O
+    O -- "API OpenAI<br/>(tokens + tool calls)" --> M
+
+    subgraph Toca ["📦 Toca (container por missão)"]
+        O
+    end
+```
+
+| Peça | Papel | Em uma frase |
+|---|---|---|
+| 🖥️ **Alien Web** | **Tela** | Abre missões e mostra a timeline ao vivo. Não decide nada. |
+| 👽 **Alien Server** | **Orquestrador** | Decide **o que**, **onde** e **quando**: cria a Toca, manda a tarefa, grava os eventos, controla o status. Nunca fala com o modelo. |
+| 🛠️ **opencode** | **Harness** | Decide **como** fazer a tarefa: conversa com o modelo, **executa as tools** (bash, edit…) e narra cada passo. |
+| 🧠 **Modelo** | **Cérebro** | Só recebe texto e devolve texto ou um pedido de tool. Não sabe que o resto existe. |
+
+> O modelo **joga**, o opencode **narra** e o Alien Server **anota** cada lance (um `AlienEvent`
+> numerado) e repassa ao navegador.
+
+---
+
+## 3. Como rodar
+
+**Pré-requisitos:** Docker (com Compose), Java 21, Maven, Node 20 e git.
 
 ```bash
 # 1. imagem da Toca (uma vez)
 docker build -t alien/toca:0.1 toca/
 
-# 2. Ollama e a rede das Tocas (alien-net)
+# 2. Ollama + rede das Tocas (alien-net)
 docker compose up -d ollama
 docker compose exec ollama ollama pull qwen3:8b
 docker compose exec ollama ollama create qwen3-8b-t10 -f /modelfiles/qwen3-8b-t10.Modelfile
 
-# 3. servidor (escuta só em 127.0.0.1:8080)
+# 3. Alien Server → 127.0.0.1:8080
 cd alien-server && mvn spring-boot:run
 
-# 4. interface (http://127.0.0.1:5173; /api e /ws vão para o servidor pelo proxy do Vite)
+# 4. Alien Web → http://127.0.0.1:5173  (/api e /ws vão para o servidor pelo proxy do Vite)
 cd alien-web && npm install && npm run dev
 ```
 
-Pela interface: **Nova missão** → descreva a tarefa, informe o caminho do repositório → **Abrir
-missão**. Pela linha de comando:
+Na tela: **Nova missão** → descreva a tarefa e informe o caminho do repositório → **Abrir missão**.
+
+<details>
+<summary><b>Configuração</b> (<code>alien-server/src/main/resources/application.yaml</code>)</summary>
+
+| Propriedade | Padrão | Para quê |
+|---|---|---|
+| `alien.agent.default-model` | `ollama/qwen3-8b-t10` | Modelo usado pelo opencode |
+| `alien.agent.base-url` | `http://ollama:11434/v1` | Ollama visto **de dentro da Toca** |
+| `alien.agent.request-timeout` | `30m` | Tempo máximo de uma chamada ao modelo |
+| `alien.mission.task-timeout` | `45m` | Tempo máximo de uma tarefa |
+| `alien.mission.keep-toca` | `false` | Manter a Toca no fim (para depurar) |
+| `alien.toca.memory` · `cpus` · `ttl` | `6GB` · `4` · `60m` | Limites da Toca |
+| `alien.workspace.allowed-roots` | `~` | Onde os repositórios podem estar |
+
+> **Sem GPU é lento.** Numa CPU de notebook (i7-1255U), o `qwen3:8b` processa ~19 tokens/s e gera
+> ~4 tokens/s. Só o system prompt do opencode tem ~7k tokens, e uma tarefa simples levou 16 min.
+> Com GPU, ou com um Ollama em outra máquina (`alien.agent.base-url`), o mesmo fluxo roda em segundos.
+
+</details>
+
+<details>
+<summary><b>API</b> (REST e WebSocket)</summary>
 
 ```bash
 curl -s -X POST localhost:8080/api/missions -H 'Content-Type: application/json' -d '{
@@ -71,155 +121,149 @@ websocat 'ws://127.0.0.1:8080/ws/missions/m-3f9a1c2e?lastSeq=0'    # um envelope
 
 | Rota | O que faz |
 |---|---|
-| `POST /api/missions` | Abre a missão (201) e começa a conduzi-la em segundo plano |
+| `POST /api/missions` | Abre a missão (201) e a conduz em segundo plano |
 | `GET /api/missions` · `GET /api/missions/{id}` | Lista / snapshot com `lastSeq` |
-| `POST /api/missions/{id}/stop` | Para a missão (aborta a sessão e descarta a Toca) |
+| `POST /api/missions/{id}/stop` | Para a missão |
 | `WS /ws/missions/{id}?lastSeq=N` | Eventos com seq > N e depois ao vivo; aceita `{"type":"stop"}` |
+| `POST /api/tocas` | Cria só uma Toca, sem missão (útil para depurar a semeadura) |
+| `GET /api/tocas` · `GET /api/tocas/{id}` · `DELETE /api/tocas/{id}` | Lista / detalha / descarta |
 
-> **Desempenho sem GPU.** Sem GPU, o Ollama usa só 2 threads; o modelo padrão `qwen3-8b-t10`
-> é o `qwen3:8b` com 10 threads ([`ollama/qwen3-8b-t10.Modelfile`](ollama/qwen3-8b-t10.Modelfile)).
-> Mesmo assim, numa CPU de notebook (i7-1255U) ele processa o prompt a ~19 tokens/s e gera a
-> ~4 tokens/s; só o system prompt do opencode tem ~7k tokens. Uma tarefa simples (corrigir uma
-> função) levou 16 min. Por isso `alien.agent.request-timeout` é 30 min. Com GPU, ou
-> com um Ollama em outra máquina (`alien.agent.base-url`), o mesmo fluxo roda em segundos. Os
-> testes não dependem de modelo: usam um LLM roteirizado (veja *Testes*).
-
-A Toca também pode ser criada sozinha, sem missão (útil para depurar a semeadura):
-
-Criar uma Toca com um repositório local (precisa estar dentro de `alien.workspace.allowed-roots`,
-por padrão a sua home):
-
-```bash
-curl -s -X POST localhost:8080/api/tocas -H 'Content-Type: application/json' -d '{
-  "missionId": "m-1",
-  "seed": {"type": "existing", "repositories": [{"path": "'$HOME'/projetos/minha-api", "ref": "main"}]}
-}'
-# → {"id":"toca-3f9a1c2e","status":"READY","agentUrl":"http://127.0.0.1:32771","workspace":["/workspace/minha-api"],...}
-```
-
-Projeto novo: `{"seed": {"type": "new", "name": "meu-projeto"}}`.
-
-| Rota (Tocas) | O que faz |
-|---|---|
-| `POST /api/tocas` | Cria, semeia e espera a Toca ficar pronta (201) |
-| `GET /api/tocas` · `GET /api/tocas/{id}` | Lista / detalha |
-| `DELETE /api/tocas/{id}` | Descarta (remove o container) |
-
+Projeto novo em vez de repositório: `"seed": {"type": "new", "name": "meu-projeto"}`.
 A senha do opencode de cada Toca nunca aparece na API.
 
-## Organização do código
+</details>
 
-```
-alien-server/src/main/java/dev/aliencode/
-├── core/toca/                        regras de negócio, sem framework de infraestrutura
-│   ├── domain/model/                 Toca, TocaId, TocaStatus, TocaEndpoint, Seed, RepositorySeed
-│   ├── domain/exception/             TocaNotFoundException, TocaProvisioningException
-│   ├── port/sandbox/                 SandboxPort + SandboxRequest, SandboxHandle, ExecResult, ManagedSandbox
-│   ├── port/workspace/               WorkspaceSnapshotPort
-│   ├── port/harness/                 AgentHarnessPort, HarnessNotReadyException
-│   ├── port/repository/              TocaRepository
-│   ├── usecase/ (+ command/)         interfaces dos casos de uso e ProvisionTocaCommand
-│   └── application/                  implementação dos casos de uso, TocaSettings
-└── adapters/toca/                    tecnologia: tudo que o core não conhece
-    ├── web/controller/               TocaController (só traduz e delega)
-    ├── web/request/                  ProvisionTocaRequest, SeedRequest, RepositoryRequest (só dados)
-    ├── web/response/                 TocaResponse (só dados; sem senha)
-    ├── web/mapper/                   TocaWebMapper: DTO ⇄ domínio
-    ├── web/handler/                  ApiExceptionHandler (ProblemDetail)
-    ├── docker/ · git/ · opencode/    implementações das portas
-    ├── persistence/ · scheduling/    repositório em memória, faxina agendada
-    └── config/                       properties → TocaSettings, DockerClient, Clock
-
-core/mission/                         a missão (M1)
-├── domain/model/                     Mission, MissionId, MissionStatus, AgentModel, AlienEvent, NewEvent, EventType
-├── port/agent/                       AgentSessionPort + AgentEvent (neutro: sem formato do opencode)
-├── port/event/ · port/repository/    EventStorePort, MissionRepository
-├── usecase/ (+ command/)             Start/Get/Stop/WatchMission, FailInterruptedMissions
-└── application/                      MissionConductor (orquestrador), MissionEventHub, TaskTimeline
-adapters/mission/
-├── web/ (controller, request, response, mapper, handler)
-├── websocket/ (handler, message, mapper)   MissionWebSocketHandler: replay + ao vivo
-├── opencode/                         OpencodeSessionAdapter (HTTP + SSE), OpencodeEventTranslator
-├── persistence/                      SqliteEventStore, SqliteMissionRepository
-└── scheduling/ · config/             MissionRecovery, SQLite, executor de threads virtuais
-
-alien-web/src/
-├── domain/                           envelope AlienEvent e o reducer puro da timeline (eventos → passos)
-├── api/                              REST (missionsApi) e MissionSocket (reconexão com lastSeq)
-├── hooks/                            useMissionTimeline
-└── components/                       App, NewMissionForm, MissionView, Timeline, TerminalPanel, DiffPanel
-```
-
-Cada fluxo (criar, semear, falhar, descartar, faxina, órfãos...) está desenhado classe a classe em
-[`docs/sequencias.md`](docs/sequencias.md).
-
-## Testes
+<details>
+<summary><b>Testes</b></summary>
 
 ```bash
-cd alien-web
-npm test     # reducer da timeline, reconexão do WebSocket com lastSeq, renderização
-
-cd alien-server
-mvn test     # unitários (domínio, casos de uso, adaptadores com git e HTTP reais)
-mvn verify   # + integração: sobe Tocas reais no Docker (precisa da imagem e da rede alien-net)
+cd alien-web    && npm test     # reducer da timeline, reconexão com lastSeq, renderização
+cd alien-server && mvn test     # unitários (domínio, casos de uso, adaptadores com git e HTTP reais)
+cd alien-server && mvn verify   # + integração com Tocas reais (precisa da imagem e da rede alien-net)
 ```
 
 O `MissionLifecycleIT` roda missões completas com o **opencode de verdade** numa Toca de verdade,
-mas com um LLM roteirizado (`ScriptedLlmServer`, compatível com a API da OpenAI) no lugar do
-Ollama: ele devolve tool calls fixas (ler `calc.py`, corrigir, rodar o teste). O teste confere a
-timeline pelo WebSocket, a reconexão com `lastSeq` e o Parar, em segundos e sem GPU. Os fluxos SSE
-reais usados nos testes do adaptador estão em `alien-server/src/test/resources/opencode/`.
+mas com um LLM roteirizado (`ScriptedLlmServer`) no lugar do Ollama: em segundos e sem GPU.
 
-## Especificação
+</details>
 
-A especificação completa, com diagramas, está em
-[`docs/alien-code-especificacao.pdf`](docs/alien-code-especificacao.pdf).
+---
 
-[`docs/referencias/opencode-1.18.33-openapi.json`](docs/referencias/opencode-1.18.33-openapi.json)
-é o contrato real da API do opencode fixado na imagem, extraído de `GET /doc`.
+## 4. Organização do código
 
-### Mapeamento real dos eventos (atualiza a seção 8.3)
+O servidor segue **Clean Architecture** com dois domínios. O `core` tem as regras e não conhece
+tecnologia; os `adapters` implementam as portas do core (Docker, git, opencode, SQLite, HTTP).
+
+```
+alien-code/
+├── alien-server/   👽 Java 21 + Spring Boot
+├── alien-web/      🖥️ React + TypeScript + Vite
+├── toca/           📦 imagem Docker da Toca (JDK, Maven, Node, git, opencode)
+├── ollama/         🧠 Modelfile do qwen3-8b-t10
+├── docs/           📄 especificação, diagramas de sequência, contrato do opencode
+└── compose.yaml    Ollama + rede alien-net
+```
+
+### 📦 Domínio `toca`: o ambiente isolado
+
+Cria, semeia, vigia e descarta os containers onde o agente trabalha.
+
+| Camada | Classes | O que é |
+|---|---|---|
+| `domain/model` | `Toca`, `TocaId`, `TocaStatus`, `TocaEndpoint`, `Seed`, `RepositorySeed` | A Toca, o endereço do opencode nela e o que vai dentro (repos ou projeto novo) |
+| `port` | `SandboxPort`, `WorkspaceSnapshotPort`, `AgentHarnessPort`, `TocaRepository` | O que o core precisa: container, cópia dos repos, harness saudável, guardar Tocas |
+| `application` | `ProvisionTocaService`, `DisposeTocaService`, `ListTocasService`, `ReapTocasService` | Criar + semear + esperar o opencode; descartar; listar; faxina por TTL |
+| `adapters` | `DockerSandboxAdapter`, `GitCloneSnapshotAdapter`, `OpencodeHealthAdapter`, `OpencodeConfigFactory`, `InMemoryTocaRepository`, `TocaJanitor`, `TocaController` | Docker, `git clone --local`, `GET /global/health`, config do opencode, memória, agendador, REST |
+
+### 🎯 Domínio `mission`: a tarefa e a timeline
+
+Conduz uma missão do início ao fim e transforma o que o agente faz em eventos.
+
+| Camada | Classes | O que é |
+|---|---|---|
+| `domain/model` | `Mission`, `MissionId`, `MissionStatus` | O pedido e **em que pé está** (a foto): `CREATED → PROVISIONING → EXECUTING → COMPLETED / FAILED / CANCELLED` |
+| | `AgentModel` | **Qual LLM** (`provedor/modelo`), um valor dentro da missão |
+| | `AlienEvent`, `NewEvent`, `EventType`, `EventSource` | **O que aconteceu** (o filme): uma linha numerada (`seq`) da timeline |
+| `port` | `AgentSessionPort` + `AgentEvent`, `EventStorePort`, `MissionRepository` | Falar com o harness (neutro, sem formato do opencode); gravar eventos e missões |
+| `application` | `MissionConductor` | O **orquestrador**: Toca → sessão → prompt → espera → fim |
+| | `TaskTimeline` | `AgentEvent` → linhas da timeline (`NewEvent`) |
+| | `MissionEventHub` | Grava no Event Store (ganha `seq`) e entrega a quem assiste, sem buraco nem repetição |
+| | `StartMissionService`, `StopMissionService`, `GetMissionService`, `FailInterruptedMissionsService` | Casos de uso |
+| `adapters` | `OpencodeSessionAdapter`, `OpencodeEventTranslator` | HTTP + **SSE** com o opencode; JSON do opencode → `AgentEvent` |
+| | `MissionWebSocketHandler`, `MissionController` | WebSocket (replay + ao vivo) e REST |
+| | `SqliteEventStore`, `SqliteMissionRepository`, `MissionRecovery` | SQLite (`~/.alien-code/alien.db`) e recuperação na subida |
+
+### 🔄 O caminho de um evento
+
+```
+modelo → opencode ──SSE──▶ OpencodeSessionAdapter → OpencodeEventTranslator → TaskTimeline
+       → MissionEventHub (seq) → SqliteEventStore + MissionWebSocketHandler ──WS──▶ Alien Web
+```
+
+### 🖥️ Alien Web (`alien-web/src`)
+
+| Pasta | O que tem |
+|---|---|
+| `domain/` | Envelope `AlienEvent` e o reducer puro da timeline (eventos → passos) |
+| `api/` | REST (`missionsApi`) e `MissionSocket` (reconecta sozinho com `lastSeq`) |
+| `hooks/` | `useMissionTimeline` |
+| `components/` | `App`, `NewMissionForm`, `MissionList`, `MissionView`, `Timeline`, `TerminalPanel`, `DiffPanel`, `StatusBadge` |
+
+### 📚 Documentação
+
+- [`docs/sequencias.md`](docs/sequencias.md): cada fluxo desenhado classe a classe.
+- [`docs/alien-code-especificacao.pdf`](docs/alien-code-especificacao.pdf): a especificação completa.
+- [`docs/referencias/opencode-1.18.33-openapi.json`](docs/referencias/opencode-1.18.33-openapi.json): contrato real da API do opencode.
+
+<details>
+<summary><b>Mapeamento real dos eventos do opencode</b> (atualiza a seção 8.3 da especificação)</summary>
 
 O OpenAPI do opencode 1.18.33 declara duas gerações de eventos (`message.part.*` e
-`session.next.*`), mas o servidor **emite só a primeira**. Conferido gravando o SSE de sessões reais:
+`session.next.*`), mas o servidor **emite só a primeira**. Conferido gravando o SSE de sessões reais
+(`alien-server/src/test/resources/opencode/`).
 
-| SSE do opencode 1.18.33 | `AgentEvent` (neutro) | Evento Alien |
+| SSE do opencode | `AgentEvent` | Evento Alien |
 |---|---|---|
 | `message.part.delta` de parte `reasoning` | `ReasoningDelta` | `thinking.delta` |
 | `message.part.delta` de parte `text` | `TextDelta` | `assistant.delta` |
 | `message.part.updated` tool `running` | `ToolStarted` | `tool.started` |
 | `message.part.updated` tool `completed` / `error` | `ToolFinished` | `tool.completed` (+ `terminal.output` se `bash`) |
-| idem, com `metadata.filediff` (edit/write) | `FileChanged` | `file.changed` |
-| `message.part.updated` parte `step-finish` (tokens) | `ModelCallFinished` | `budget.updated` (acumulado) |
+| idem, com `metadata.filediff` | `FileChanged` | `file.changed` |
+| `message.part.updated` parte `step-finish` | `ModelCallFinished` | `budget.updated` (acumulado) |
 | `session.error` `MessageAbortedError` | `SessionFailed(aborted)` | fim da tarefa por Parar |
-| `session.error` (outros, ex.: `APIError`) | `SessionFailed` | `step.failed` + missão `FAILED` |
-| `session.idle` | `SessionIdle` | fim da tarefa (`step.completed`) |
+| `session.error` (outros) | `SessionFailed` | `step.failed` + missão `FAILED` |
+| `session.idle` | `SessionIdle` | `step.completed` |
 
-O `message.part.delta` traz só o id da parte; o tipo (texto ou raciocínio) vem do
-`message.part.updated` anterior, por isso o tradutor guarda o tipo de cada parte.
+O `message.part.delta` traz só o id da parte; o tipo vem do `message.part.updated` anterior, por isso
+o tradutor guarda o tipo de cada parte.
 
-## Diferenças conscientes em relação à especificação (M0 e M1)
+</details>
 
-- **Rede da Toca:** a rede `alien-net` ainda é uma bridge comum. O bloqueio de saída (só Ollama e
-  proxy de pacotes) chega no M2, junto com o proxy — uma rede Docker `internal` não permite publicar
-  a porta do opencode para o servidor no host.
-- **Limite de processos:** 512 em vez de 256; opencode + Node + Maven passam de 256 com folga.
-- **Persistência:** missões e eventos em SQLite (`~/.alien-code/alien.db`); Tocas continuam em
-  memória, e missões ativas durante um reinício viram `FAILED` na subida seguinte.
-- **Alterações não commitadas** do repositório original ainda não são levadas para a Toca.
-- **Permissões do agente (M1):** sem cartões de aprovação na UI ainda, a Toca recebe `edit` e
-  `bash` liberados (`webfetch` negado). Os pedidos de permissão viram `approval.requested` no M2.
-- **Saídas grandes (M1):** `output` e `patch` são cortados em 16 mil caracteres no evento
-  (`truncated: true`); o endpoint de blobs chega no M2.
-- **Alien Web:** React 19 (a especificação cita 18, a versão estável quando foi escrita) e Vitest 4,
-  compatível com o Node 20 da máquina.
-- **Rede `alien-net`:** passa a ser criada pelo `compose.yaml`, junto com o Ollama (alias `ollama`).
-- **Configuração do opencode:** entregue à Toca em `OPENCODE_CONFIG_CONTENT`, gerada a partir de
-  `alien.agent.*` (provedor Ollama compatível com OpenAI, `timeout` do provedor ampliado).
+<details>
+<summary><b>Diferenças conscientes em relação à especificação</b> (M0 e M1)</summary>
 
-## Referências
+- **Rede da Toca:** `alien-net` ainda é uma bridge comum, criada pelo `compose.yaml`. O bloqueio de
+  saída chega no M2, com o proxy (uma rede `internal` não permite publicar a porta do opencode).
+- **Limite de processos:** 512 em vez de 256; opencode + Node + Maven passam de 256.
+- **Persistência:** missões e eventos em SQLite; Tocas em memória. Missões ativas durante um reinício
+  viram `FAILED` na subida seguinte.
+- **Alterações não commitadas** do repositório original ainda não vão para a Toca.
+- **Permissões do agente:** `edit` e `bash` liberados, `webfetch` negado. Cartões de aprovação no M2.
+- **Saídas grandes:** `output` e `patch` cortados em 16 mil caracteres (`truncated: true`); blobs no M2.
+- **Alien Web:** React 19 e Vitest 4 (a especificação cita React 18).
+- **Configuração do opencode:** entregue em `OPENCODE_CONFIG_CONTENT`, gerada de `alien.agent.*`.
 
-- [awslabs/aidlc-workflows](https://github.com/awslabs/aidlc-workflows): metodologia e motor de
-  workflow (perfis, portões de aprovação, sensores, auditoria), com suporte nativo ao opencode.
-- [Graphify-Labs/graphify](https://github.com/Graphify-Labs/graphify): grafo de dependências local
-  (tree-sitter + MCP), usado para ordenar tarefas dependentes entre repositórios.
+</details>
+
+---
+
+## 5. Marcos
+
+| | Marco | O que entrega |
+|:-:|---|---|
+| ✅ | **M0 · Esqueleto** | Imagem da Toca com opencode; o Alien Server cria, semeia, vigia e destrói Tocas com limites de CPU, memória e processos |
+| ✅ | **M1 · Timeline ao vivo** | Missão com 1 repo e 1 tarefa; eventos do opencode → Event Store → WebSocket → UI, com replay por `lastSeq` e botão Parar |
+| ⏳ | **M2 · Entrega segura** | Rede bloqueada + proxy de pacotes, aprovações na UI, blobs para saídas grandes |
+| ⏳ | **M3 · Grafo** | Grafo de dependências local ([graphify](https://github.com/Graphify-Labs/graphify)) para entender o código e ordenar tarefas |
+| ⏳ | **M4 · Multi-repo + DAG** | Várias tarefas e repositórios, executadas em ordem de dependência |
+| ⏳ | **M5 · AI-DLC completo** | Fluxo completo com perfis e portões de aprovação ([aidlc-workflows](https://github.com/awslabs/aidlc-workflows)) |
