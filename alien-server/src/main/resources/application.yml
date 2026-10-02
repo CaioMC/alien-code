@@ -1,3 +1,72 @@
+# ════════════════════════════════════════════════════════════════════════════════
+#  Alien Server: configuração padrão
+#
+#  Para trocar algo só na sua máquina, sem mexer no repositório, crie o arquivo
+#  ~/.alien-code/alien.yml com as chaves que quer mudar. Ele é lido por cima deste.
+#  Toda chave também pode vir do ambiente: alien.model.default → ALIEN_MODEL_DEFAULT
+# ════════════════════════════════════════════════════════════════════════════════
+
+alien:
+
+  # ── 1. Modelo ─────────────────────────────────────────────────────────────────
+  # O opencode, dentro da Toca, conversa com qualquer provedor compatível com a API
+  # da OpenAI (Ollama, OpenRouter, LiteLLM, vLLM, OpenAI...).
+  #
+  #   default    modelo das missões, no formato <provedor>/<modelo>
+  #   providers  um bloco por provedor; o nome do bloco é o <provedor> acima
+  #
+  # Para usar outro provedor, acrescente um bloco e aponte o default para ele:
+  #
+  #   alien:
+  #     model:
+    #       default: openrouter/qwen/qwen3-coder
+    #       providers:
+  #         openrouter:
+  #           name: OpenRouter
+  #           base-url: https://openrouter.ai/api/v1
+  #           api-key: ${OPENROUTER_API_KEY}       # chave sempre do ambiente, nunca aqui
+  #           models:
+  #             - qwen/qwen3-coder
+  model:
+    default: ollama/qwen3-8b-t10
+    # Tempo máximo de uma chamada ao modelo. Na CPU, o system prompt do opencode
+    # (~7k tokens) sozinho passa dos 5 min padrão.
+    request-timeout: 30m
+    providers:
+      # Ollama do compose.yaml, visto de dentro da Toca (rede alien-net). Sem chave.
+      ollama:
+        name: Ollama
+        base-url: http://ollama:11434/v1
+        models:
+          - qwen3-8b-t10        # qwen3:8b com 10 threads na CPU (ollama/qwen3-8b-t10.Modelfile)
+          - qwen3:8b
+
+  # ── 2. Missões ────────────────────────────────────────────────────────────────
+  mission:
+    task-timeout: 45m       # tempo máximo de uma tarefa; ao estourar, a sessão é abortada
+    keep-toca: false        # true = mantém a Toca no fim da missão, para depurar (o ttl ainda vale)
+    store-path: ${user.home}/.alien-code/alien.db   # SQLite com missões e eventos
+
+  # ── 3. Toca (o container onde o agente trabalha) ──────────────────────────────
+  toca:
+    image: alien/toca:0.1   # docker build -t alien/toca:0.1 toca/
+    network: alien-net      # mesma rede do Ollama no compose.yaml
+    memory: 6GB
+    cpus: 4
+    pids-limit: 512
+    ttl: 60m                # Toca esquecida é removida depois disso
+    ready-timeout: 60s
+    reap-interval: 60s
+    agent-port: 4096        # porta do opencode serve dentro da Toca
+    agent-username: opencode
+
+  # ── 4. Workspace ──────────────────────────────────────────────────────────────
+  workspace:
+    # Pastas de onde a API aceita semear repositórios
+    allowed-roots:
+      - ${user.home}
+
+# ── 5. Servidor ─────────────────────────────────────────────────────────────────
 server:
   # Só a máquina do dev: a API aceita caminhos de repositórios locais.
   address: 127.0.0.1
@@ -6,40 +75,11 @@ server:
 spring:
   application:
     name: alien-server
+  config:
+    import: optional:file:${user.home}/.alien-code/alien.yml
   sql:
     init:
-      # schema.sql cria as tabelas do Event Store se ainda não existirem
-      mode: always
-
-alien:
-  toca:
-    image: alien/toca:0.1
-    network: alien-net
-    agent-port: 4096
-    agent-username: opencode
-    memory: 6GB
-    cpus: 4
-    pids-limit: 512
-    ttl: 60m
-    ready-timeout: 60s
-    reap-interval: 60s
-  workspace:
-    allowed-roots:
-      - ${user.home}
-  agent:
-    # Ollama visto de dentro da Toca: container "ollama" na rede alien-net (compose.yaml)
-    base-url: http://ollama:11434/v1
-    # qwen3-8b-t10: qwen3:8b com 10 threads na CPU (ollama/qwen3-8b-t10.Modelfile)
-    models:
-      - qwen3-8b-t10
-      - qwen3:8b
-    default-model: ollama/qwen3-8b-t10
-    # Na CPU, uma chamada com o system prompt do opencode (~7k tokens) passa dos 5 min padrão
-    request-timeout: 30m
-  mission:
-    task-timeout: 45m
-    keep-toca: false
-    store-path: ${user.home}/.alien-code/alien.db
+      mode: always          # schema.sql cria as tabelas do Event Store se ainda não existirem
 
 logging:
   level:

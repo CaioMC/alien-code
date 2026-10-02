@@ -88,13 +88,36 @@ cd alien-web && npm install && npm run dev
 Na tela: **Nova missão** → descreva a tarefa e informe o caminho do repositório → **Abrir missão**.
 
 <details>
-<summary><b>Configuração</b> (<code>alien-server/src/main/resources/application.yaml</code>)</summary>
+<summary><b>Configuração</b> (<code>alien-server/src/main/resources/application.yml</code>)</summary>
+
+O `application.yml` é dividido em cinco seções: **1. Modelo** · **2. Missões** · **3. Toca** ·
+**4. Workspace** · **5. Servidor**. O padrão funciona sem chave nenhuma, com o Ollama do
+`compose.yaml`.
+
+**Trocar de modelo** é como no opencode: cada provedor compatível com a API da OpenAI é um bloco
+em `alien.model.providers`, e `alien.model.default` escolhe `provedor/modelo`. Para não mexer no
+repositório, coloque isso em `~/.alien-code/alien.yml`, que é lido por cima do padrão:
+
+```yaml
+alien:
+  model:
+    default: openrouter/qwen/qwen3-coder
+    providers:
+      openrouter:
+        name: OpenRouter
+        base-url: https://openrouter.ai/api/v1
+        api-key: ${OPENROUTER_API_KEY}     # a chave vem do ambiente
+        models:
+          - qwen/qwen3-coder
+```
 
 | Propriedade | Padrão | Para quê |
 |---|---|---|
-| `alien.agent.default-model` | `ollama/qwen3-8b-t10` | Modelo usado pelo opencode |
-| `alien.agent.base-url` | `http://ollama:11434/v1` | Ollama visto **de dentro da Toca** |
-| `alien.agent.request-timeout` | `30m` | Tempo máximo de uma chamada ao modelo |
+| `alien.model.default` | `ollama/qwen3-8b-t10` | Modelo das missões (`provedor/modelo`) |
+| `alien.model.providers.<id>.base-url` | `http://ollama:11434/v1` | Provedor visto **de dentro da Toca** |
+| `alien.model.providers.<id>.api-key` | (vazia) | Chave do provedor; use `${VARIAVEL}` |
+| `alien.model.providers.<id>.models` | `qwen3-8b-t10`, `qwen3:8b` | Modelos oferecidos ao agente |
+| `alien.model.request-timeout` | `30m` | Tempo máximo de uma chamada ao modelo |
 | `alien.mission.task-timeout` | `45m` | Tempo máximo de uma tarefa |
 | `alien.mission.keep-toca` | `false` | Manter a Toca no fim (para depurar) |
 | `alien.toca.memory` · `cpus` · `ttl` | `6GB` · `4` · `60m` | Limites da Toca |
@@ -102,7 +125,7 @@ Na tela: **Nova missão** → descreva a tarefa e informe o caminho do repositó
 
 > **Sem GPU é lento.** Numa CPU de notebook (i7-1255U), o `qwen3:8b` processa ~19 tokens/s e gera
 > ~4 tokens/s. Só o system prompt do opencode tem ~7k tokens, e uma tarefa simples levou 16 min.
-> Com GPU, ou com um Ollama em outra máquina (`alien.agent.base-url`), o mesmo fluxo roda em segundos.
+> Com GPU, ou com um Ollama em outra máquina (`alien.model.providers.ollama.base-url`), o mesmo fluxo roda em segundos.
 
 </details>
 
@@ -251,7 +274,7 @@ o tradutor guarda o tipo de cada parte.
 - **Permissões do agente:** `edit` e `bash` liberados, `webfetch` negado. Cartões de aprovação no M2.
 - **Saídas grandes:** `output` e `patch` cortados em 16 mil caracteres (`truncated: true`); blobs no M2.
 - **Alien Web:** React 19 e Vitest 4 (a especificação cita React 18).
-- **Configuração do opencode:** entregue em `OPENCODE_CONFIG_CONTENT`, gerada de `alien.agent.*`.
+- **Configuração do opencode:** entregue em `OPENCODE_CONFIG_CONTENT`, gerada de `alien.model.*`.
 
 </details>
 

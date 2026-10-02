@@ -25,7 +25,7 @@ public class MissionConfig {
     @Bean
     MissionSettings missionSettings(AlienProperties alien, MissionProperties mission) {
         return new MissionSettings(
-                AgentModel.parse(alien.agent().defaultModel()),
+                AgentModel.parse(alien.model().defaultModel()),
                 mission.taskTimeout(),
                 mission.keepToca()
         );

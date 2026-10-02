@@ -84,9 +84,9 @@ class MissionLifecycleIT {
         registry.add("alien.workspace.allowed-roots", () -> root.toString());
         registry.add("alien.toca.memory", () -> "1GB");
         registry.add("alien.toca.cpus", () -> "1");
-        registry.add("alien.agent.base-url", () -> llm.baseUrl());
-        registry.add("alien.agent.models[0]", () -> "roteiro");
-        registry.add("alien.agent.default-model", () -> "ollama/roteiro");
+        registry.add("alien.model.default", () -> "ollama/roteiro");
+        registry.add("alien.model.providers.ollama.base-url", () -> llm.baseUrl());
+        registry.add("alien.model.providers.ollama.models[0]", () -> "roteiro");
         registry.add("alien.mission.task-timeout", () -> "60s");
         registry.add("alien.mission.store-path", () -> root.resolve("alien.db").toString());
     }

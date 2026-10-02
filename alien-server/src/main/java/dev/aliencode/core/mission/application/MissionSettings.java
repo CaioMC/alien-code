@@ -20,11 +20,11 @@ public record MissionSettings(
 
     public MissionSettings {
         if (isNull(defaultModel)) {
-            throw new IllegalArgumentException("Configure o modelo padrão (alien.agent.default-model)");
+            throw new IllegalArgumentException("Configure o modelo padrão (alien.model.default)");
         }
 
         if (isNull(taskTimeout) || taskTimeout.isNegative() || taskTimeout.isZero()) {
-            throw new IllegalArgumentException("O tempo máximo da tarefa precisa ser positivo (alien.agent.task-timeout)");
+            throw new IllegalArgumentException("O tempo máximo da tarefa precisa ser positivo (alien.mission.task-timeout)");
         }
     }
 }
