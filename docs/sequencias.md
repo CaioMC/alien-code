@@ -26,6 +26,8 @@ classes; as mensagens são os métodos chamados.
 | 17 | [Parar a missão](#17-parar-a-missão) | `{"type":"stop"}` ou `POST /api/missions/{id}/stop` |
 | 18 | [Erro do agente e tempo esgotado](#18-erro-do-agente-e-tempo-esgotado) | `session.error` / `task-timeout` |
 | 19 | [Missões interrompidas por reinício](#19-missões-interrompidas-por-reinício) | `ApplicationReadyEvent` |
+| 20 | [Colher a entrega (M2)](#20-colher-a-entrega-m2) | o agente terminou a tarefa |
+| 21 | [Aplicar ou descartar a entrega (M2)](#21-aplicar-ou-descartar-a-entrega-m2) | `POST /api/missions/{id}/delivery/approve` · `/reject` |
 
 ## 0. Mapa das camadas
 
@@ -230,6 +232,9 @@ sequenceDiagram
     Tar-->>Sbx: arquivo .tar temporário
     Sbx->>Dk: copyArchiveToContainerCmd(remotePath = /workspace, tar)
     Sbx->>Sbx: deleteQuietly(tar) (finally)
+
+    Svc->>Sbx: exec(git -C /workspace/nome tag --force alien-base)
+    Note over Svc,Sbx: markBase: o ponto de partida da entrega (diagrama 20)
 
     Svc->>Snap: discard(tmp/nome) (finally)
     Snap->>Snap: deleteRecursively(tmp)
@@ -519,32 +524,34 @@ sequenceDiagram
 ## 13. Mapa das camadas da missão (M1)
 
 A missão é um contexto próprio (`core.mission` / `adapters.mission`). Ela usa a Toca pelos casos
-de uso do contexto `toca` (`ProvisionTocaUseCase`, `DisposeTocaUseCase`), nunca pelas portas dele.
+de uso do contexto `toca` (`ProvisionTocaUseCase`, `HarvestTocaUseCase`, `DisposeTocaUseCase`),
+nunca pelas portas dele.
 
 ```mermaid
 flowchart LR
     subgraph IN["adapters.mission (entrada)"]
-        C["web.controller<br/>MissionController"]
-        M["web.mapper<br/>MissionWebMapper"]
+        C["web.controller<br/>MissionController · DeliveryController"]
+        M["web.mapper<br/>MissionWebMapper · DeliveryWebMapper"]
         W["websocket.handler<br/>MissionWebSocketHandler"]
         WM["websocket.mapper<br/>AlienEventMessageMapper"]
         R["scheduling<br/>MissionRecovery"]
     end
 
     subgraph CORE["core.mission"]
-        UC["usecase<br/>StartMissionUseCase · GetMissionUseCase<br/>StopMissionUseCase · WatchMissionUseCase<br/>FailInterruptedMissionsUseCase"]
-        APP["application<br/>StartMissionService · MissionConductor<br/>MissionEventHub · TaskTimeline · RunningMission"]
-        DOM["domain.model<br/>Mission · MissionId · MissionStatus · AgentModel<br/>AlienEvent · NewEvent · EventType · EventSource"]
-        PORT["port<br/>agent · event · repository"]
+        UC["usecase<br/>StartMissionUseCase · GetMissionUseCase<br/>StopMissionUseCase · WatchMissionUseCase<br/>FailInterruptedMissionsUseCase<br/>GetDeliveryUseCase · ApproveDeliveryUseCase · RejectDeliveryUseCase"]
+        APP["application<br/>StartMissionService · MissionConductor<br/>MissionEventHub · MissionTransitions · TaskTimeline · RunningMission<br/>GetDeliveryService · ReviewDeliveryService"]
+        DOM["domain.model<br/>Mission · MissionId · MissionStatus · AgentModel<br/>AlienEvent · NewEvent · EventType · EventSource<br/>Delivery · DeliveryStatus"]
+        PORT["port<br/>agent · event · repository · delivery"]
     end
 
     subgraph TOCA["core.toca"]
-        TUC["usecase<br/>ProvisionTocaUseCase · DisposeTocaUseCase"]
+        TUC["usecase<br/>ProvisionTocaUseCase · HarvestTocaUseCase · DisposeTocaUseCase"]
     end
 
     subgraph OUT["adapters.mission (saída)"]
         O["opencode<br/>OpencodeSessionAdapter<br/>OpencodeEventTranslator"]
-        P["persistence<br/>SqliteEventStore · SqliteMissionRepository"]
+        P["persistence<br/>SqliteEventStore · SqliteMissionRepository<br/>SqliteDeliveryRepository"]
+        G["git<br/>GitWorktreeDeliveryAdapter"]
     end
 
     C --> M
@@ -552,7 +559,7 @@ flowchart LR
     W --> WM
     APP -. implementa .-> UC
     APP --> DOM & PORT & TUC
-    O & P -. implementam .-> PORT
+    O & P & G -. implementam .-> PORT
 ```
 
 ## 14. Abrir uma missão
@@ -633,7 +640,8 @@ sequenceDiagram
     Oc--)Ag: session.idle
     Ag->>Cond: SessionIdle
     Cond->>Cond: RunningMission.finish(COMPLETED)
-    Cond->>Hub: step.completed t1, mission.state COMPLETED
+    Cond->>Hub: step.completed t1
+    Cond->>Cond: harvest(mission, toca): diagrama 20<br/>(AWAITING_REVIEW, ou COMPLETED sem alterações)
     Cond->>Ag: subscription.close()
     Cond->>Disp: dispose(tocaId)
     Cond->>Hub: step.completed toca.dispose
@@ -748,4 +756,98 @@ sequenceDiagram
         Svc->>Repo: save(mission.failed("O servidor foi reiniciado durante a missão"))
         Svc->>Hub: publish(mission.state FAILED)
     end
+```
+
+`AWAITING_REVIEW` não é um estado ativo: a missão que espera revisão não depende de quem a
+conduzia, e a entrega (já no SQLite) sobrevive ao reinício.
+
+## 20. Colher a entrega (M2)
+
+Quando o agente termina, o patch sai da Toca **antes** de ela ser descartada. A Toca não guarda
+nada depois disso: a entrega mora no SQLite, esperando o dev. Arquivos de build e cache
+(`__pycache__/`, `target/`, `node_modules/`...) ficam fora pelo `core.excludesFile` da imagem
+(`toca/toca-gitignore`).
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Cond as MissionConductor
+    participant Harv as HarvestTocaService
+    participant Sbx as DockerSandboxAdapter
+    participant Git as git (na Toca)
+    participant Del as SqliteDeliveryRepository
+    participant Trans as MissionTransitions
+    participant Hub as MissionEventHub
+    participant Disp as DisposeTocaService
+
+    Cond->>Hub: step.started toca.harvest
+    Cond->>Harv: harvest(tocaId, /workspace/calc, título da missão)
+    Harv->>Sbx: exec(git status --porcelain)
+    opt há alterações não commitadas
+        Harv->>Sbx: exec(git add --all)
+        Harv->>Sbx: exec(git commit --no-verify -m título)
+    end
+    Harv->>Sbx: exec(git rev-parse alien-base)
+    Harv->>Sbx: exec(git format-patch --stdout --binary alien-base..HEAD)
+    Harv->>Sbx: exec(git diff --numstat alien-base..HEAD)
+    Sbx->>Git: comandos como o usuário alien
+    Harv-->>Cond: WorkspaceChanges(baseCommit, patch, files)
+    Cond->>Hub: step.completed toca.harvest
+    alt nenhuma alteração
+        Cond->>Trans: record(mission.completed)
+    else há patch
+        Cond->>Cond: Delivery.pending(..., branch alien/m-42)
+        Cond->>Del: save(delivery)
+        Cond->>Hub: delivery.ready {branch, files, additions, deletions}
+        Cond->>Trans: record(mission.awaitingReview)
+    end
+    Trans->>Hub: mission.state
+    Cond->>Disp: dispose(tocaId) (finally)
+```
+
+Se a colheita falhar, a missão vai para `FAILED` com o motivo e a Toca é descartada do mesmo
+jeito. Projeto novo (`Seed.NewProject`) ainda não tem para onde ser entregue e termina em
+`COMPLETED`, como no M1.
+
+## 21. Aplicar ou descartar a entrega (M2)
+
+O repositório do dev só é tocado aqui, pelo git do host, e numa branch nova: a worktree
+temporária deixa a branch atual e os arquivos abertos exatamente como estavam.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Dev
+    participant Ctl as DeliveryController
+    participant Rev as ReviewDeliveryService
+    participant Del as SqliteDeliveryRepository
+    participant Wt as GitWorktreeDeliveryAdapter
+    participant Git as git (no host)
+    participant Trans as MissionTransitions
+    participant Hub as MissionEventHub
+    participant Hdl as MissionExceptionHandler
+
+    Dev->>Ctl: POST /api/missions/m-42/delivery/approve
+    Ctl->>Rev: approve(m-42) (synchronized)
+    Rev->>Rev: missão em AWAITING_REVIEW e entrega PENDING?
+    Rev->>Wt: applyToBranch(repositório, baseCommit, alien/m-42, patch)
+    Wt->>Git: rev-parse --verify refs/heads/alien/m-42 (não pode existir)
+    Wt->>Git: cat-file -e baseCommit (precisa existir)
+    Wt->>Git: worktree add -b alien/m-42 tmp/worktree baseCommit
+    Wt->>Git: am entrega.patch (dentro da worktree)
+    alt patch não aplicou
+        Wt->>Git: am --abort, worktree remove --force, branch -D
+        Wt-->>Rev: DeliveryConflictException
+        Rev-->>Hdl: entrega continua PENDING
+        Hdl-->>Dev: 409 {detail}
+    end
+    Wt->>Git: rev-parse HEAD, worktree remove
+    Wt-->>Rev: headCommit
+    Rev->>Del: save(delivery.applied(headCommit))
+    Rev->>Hub: delivery.applied {branch, headCommit}
+    Rev->>Trans: record(mission.delivered): COMPLETED
+    Rev-->>Ctl: Delivery
+    Ctl-->>Dev: 200 {status: APPLIED, branch, headCommit}
+
+    Note over Dev,Hub: POST .../delivery/reject → delivery.rejected e missão REJECTED, sem tocar no repositório
 ```

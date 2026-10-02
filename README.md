@@ -70,7 +70,7 @@ flowchart LR
 **Pré-requisitos:** Docker (com Compose), Java 21, Maven, Node 20 e git.
 
 ```bash
-# 1. imagem da Toca (uma vez)
+# 1. imagem da Toca (de novo sempre que toca/ mudar)
 docker build -t alien/toca:0.1 toca/
 
 # 2. Ollama + rede das Tocas (alien-net)
@@ -86,6 +86,9 @@ cd alien-web && npm install && npm run dev
 ```
 
 Na tela: **Nova missão** → descreva a tarefa e informe o caminho do repositório → **Abrir missão**.
+Quando o agente termina, a missão fica **AGUARDANDO REVISÃO** com o patch no cartão **Entrega**:
+**Aplicar** cria a branch `alien/<missão>` no seu repositório (sua branch atual e seus arquivos
+não são tocados); **Descartar** não leva nada.
 
 <details>
 <summary><b>Configuração</b> (<code>alien-server/src/main/resources/application.yml</code>)</summary>
@@ -147,6 +150,8 @@ websocat 'ws://127.0.0.1:8080/ws/missions/m-3f9a1c2e?lastSeq=0'    # um envelope
 | `POST /api/missions` | Abre a missão (201) e a conduz em segundo plano |
 | `GET /api/missions` · `GET /api/missions/{id}` | Lista / snapshot com `lastSeq` |
 | `POST /api/missions/{id}/stop` | Para a missão |
+| `GET /api/missions/{id}/delivery` | Entrega: patch completo, arquivos e estado |
+| `POST /api/missions/{id}/delivery/approve` · `/reject` | Aplica numa branch `alien/<missão>` (409 se a branch já existe) · descarta |
 | `WS /ws/missions/{id}?lastSeq=N` | Eventos com seq > N e depois ao vivo; aceita `{"type":"stop"}` |
 | `POST /api/tocas` | Cria só uma Toca, sem missão (útil para depurar a semeadura) |
 | `GET /api/tocas` · `GET /api/tocas/{id}` · `DELETE /api/tocas/{id}` | Lista / detalha / descarta |
@@ -286,6 +291,6 @@ o tradutor guarda o tipo de cada parte.
 |:-:|---|---|
 | ✅ | **M0 · Esqueleto** | Imagem da Toca com opencode; o Alien Server cria, semeia, vigia e destrói Tocas com limites de CPU, memória e processos |
 | ✅ | **M1 · Timeline ao vivo** | Missão com 1 repo e 1 tarefa; eventos do opencode → Event Store → WebSocket → UI, com replay por `lastSeq` e botão Parar |
-| ⏳ | **M2 · Entrega segura** | Rede bloqueada + proxy de pacotes, aprovações na UI, blobs para saídas grandes |
+| 🚧 | **M2 · Entrega segura** | ✅ patch revisado na UI e aplicado numa branch local · ⏳ gitleaks, verificação pelo orquestrador e halting, aprovações de comandos, rede bloqueada + proxy de pacotes, blobs para saídas grandes |
 | ⏳ | **M3 · Grafo** | Grafo de dependências local ([graphify](https://github.com/Graphify-Labs/graphify)) consultado pelo agente via MCP; impacto da mudança, testes afetados e diff estrutural da entrega |
 | ⏳ | **M4 · AI-DLC completo** | Fluxo completo com perfis e portões de aprovação ([aidlc-workflows](https://github.com/awslabs/aidlc-workflows)) |
