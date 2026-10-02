@@ -10,8 +10,8 @@ import static java.util.Objects.nonNull;
 import static org.apache.commons.lang3.StringUtils.isBlank;
 
 /**
- * Uma unidade de trabalho pedida pelo usuário. No M1: um repositório (ou projeto novo),
- * uma tarefa, uma sessão do opencode. Imutável; cada transição devolve uma nova instância.
+ * Uma unidade de trabalho pedida pelo usuário: um repositório (ou projeto novo), uma tarefa,
+ * uma sessão do opencode e, quando o agente altera algo, uma entrega para o dev revisar. Imutável; cada transição devolve uma nova instância.
  *
  * @param prompt    o pedido do usuário, enviado ao agente como instrução da tarefa
  * @param tocaId    Toca da missão, depois de provisionada
@@ -117,6 +117,44 @@ public record Mission(
 
         return this.with(
                 MissionStatus.COMPLETED,
+                this.tocaId,
+                this.sessionId,
+                now,
+                null
+        );
+    }
+
+    /** O agente terminou e o patch foi colhido: a Toca pode ir embora, a entrega fica esperando o dev. */
+    public Mission awaitingReview() {
+        this.requireStatus(MissionStatus.EXECUTING);
+
+        return this.with(
+                MissionStatus.AWAITING_REVIEW,
+                this.tocaId,
+                this.sessionId,
+                null,
+                null
+        );
+    }
+
+    /** A entrega foi aplicada numa branch local. */
+    public Mission delivered(Instant now) {
+        this.requireStatus(MissionStatus.AWAITING_REVIEW);
+
+        return this.with(
+                MissionStatus.COMPLETED,
+                this.tocaId,
+                this.sessionId,
+                now,
+                null
+        );
+    }
+
+    public Mission rejected(Instant now) {
+        this.requireStatus(MissionStatus.AWAITING_REVIEW);
+
+        return this.with(
+                MissionStatus.REJECTED,
                 this.tocaId,
                 this.sessionId,
                 now,

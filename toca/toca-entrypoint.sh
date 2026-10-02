@@ -11,5 +11,7 @@ fi
 git config --global user.name "Alien Code"
 git config --global user.email "toca@alien-code.local"
 git config --global init.defaultBranch main
+# artefatos de build e cache não entram na entrega (ver toca-gitignore)
+git config --global core.excludesFile /etc/alien/gitignore
 
 exec opencode serve --hostname 0.0.0.0 --port "${OPENCODE_PORT}"

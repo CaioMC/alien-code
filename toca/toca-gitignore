@@ -1,0 +1,11 @@
+# Artefatos que o agente gera ao compilar e testar dentro da Toca e que não devem ir para a
+# entrega. Vale só para arquivos novos não rastreados: o que o repositório já versiona continua
+# entrando normalmente. O .gitignore do próprio repositório é respeitado como sempre.
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+node_modules/
+target/
+.gradle/
+.DS_Store

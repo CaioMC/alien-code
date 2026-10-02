@@ -11,6 +11,8 @@ import org.junit.jupiter.api.Test;
 
 import dev.aliencode.core.mission.application.MissionTestDoubles.FakeAgent;
 import dev.aliencode.core.mission.application.MissionTestDoubles.FakeDisposeToca;
+import dev.aliencode.core.mission.application.MissionTestDoubles.FakeHarvestToca;
+import dev.aliencode.core.mission.application.MissionTestDoubles.InMemoryDeliveries;
 import dev.aliencode.core.mission.application.MissionTestDoubles.FakeProvisionToca;
 import dev.aliencode.core.mission.application.MissionTestDoubles.InMemoryEventStore;
 import dev.aliencode.core.mission.application.MissionTestDoubles.InMemoryMissions;
@@ -39,9 +41,11 @@ class StartMissionServiceTest {
 
     private final MissionConductor conductor = new MissionConductor(
             this.provision,
+            new FakeHarvestToca(),
             new FakeDisposeToca(),
             new FakeAgent(),
-            this.missions,
+            new InMemoryDeliveries(),
+            new MissionTransitions(this.missions, this.hub),
             this.hub,
             this.settings,
             this.clock,

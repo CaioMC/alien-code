@@ -26,3 +26,18 @@ CREATE TABLE IF NOT EXISTS mission_event (
     payload        TEXT    NOT NULL,
     PRIMARY KEY (mission_id, seq)
 );
+
+-- Uma entrega por missão: o patch colhido da Toca, esperando o dev aplicar ou descartar.
+CREATE TABLE IF NOT EXISTS delivery (
+    mission_id      TEXT PRIMARY KEY,
+    repository      TEXT NOT NULL,
+    repository_path TEXT NOT NULL,
+    base_commit     TEXT NOT NULL,
+    patch           TEXT NOT NULL,
+    files           TEXT NOT NULL,
+    status          TEXT NOT NULL,
+    branch          TEXT NOT NULL,
+    head_commit     TEXT,
+    created_at      TEXT NOT NULL,
+    resolved_at     TEXT
+);

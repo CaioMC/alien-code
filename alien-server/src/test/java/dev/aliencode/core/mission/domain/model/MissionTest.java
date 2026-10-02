@@ -99,4 +99,45 @@ class MissionTest {
 
         assertThatThrownBy(() -> new MissionId("../etc")).isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test
+    void entregaEsperaRevisaoEDepoisConcluiOuEDescartada() {
+        TocaId toca = TocaId.newId();
+        Mission executing = Mission.create(
+                MissionId.newId(),
+                "Soma",
+                "Corrija a soma",
+                SEED,
+                MODEL,
+                NOW
+        )
+                .provisioning()
+                .withToca(toca)
+                .executing(toca, "ses_1");
+
+        Mission review = executing.awaitingReview();
+
+        assertThat(review.status()).isEqualTo(MissionStatus.AWAITING_REVIEW);
+        assertThat(review.status().isActive()).isFalse();
+        assertThat(review.finishedAt()).isNull();
+
+        assertThat(review.delivered(NOW).status()).isEqualTo(MissionStatus.COMPLETED);
+        assertThat(review.rejected(NOW).status()).isEqualTo(MissionStatus.REJECTED);
+        assertThat(review.rejected(NOW).finishedAt()).isEqualTo(NOW);
+    }
+
+    @Test
+    void soAplicaEntregaQueEstaEsperandoRevisao() {
+        Mission mission = Mission.create(
+                MissionId.newId(),
+                "Soma",
+                "Corrija",
+                SEED,
+                MODEL,
+                NOW
+        );
+
+        assertThatThrownBy(() -> mission.delivered(NOW)).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(mission::awaitingReview).isInstanceOf(IllegalStateException.class);
+    }
 }

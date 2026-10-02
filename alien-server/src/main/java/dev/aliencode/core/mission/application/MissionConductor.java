@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -14,6 +15,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
+import dev.aliencode.core.mission.domain.model.Delivery;
 import dev.aliencode.core.mission.domain.model.EventSource;
 import dev.aliencode.core.mission.domain.model.EventType;
 import dev.aliencode.core.mission.domain.model.Mission;
@@ -22,18 +24,22 @@ import dev.aliencode.core.mission.domain.model.NewEvent;
 import dev.aliencode.core.mission.port.agent.AgentEvent;
 import dev.aliencode.core.mission.port.agent.AgentSessionPort;
 import dev.aliencode.core.mission.port.agent.AgentSubscription;
-import dev.aliencode.core.mission.port.repository.MissionRepository;
+import dev.aliencode.core.mission.port.repository.DeliveryRepository;
+import dev.aliencode.core.toca.domain.model.RepositorySeed;
+import dev.aliencode.core.toca.domain.model.Seed;
 import dev.aliencode.core.toca.domain.model.Toca;
 import dev.aliencode.core.toca.domain.model.TocaEndpoint;
+import dev.aliencode.core.toca.domain.model.WorkspaceChanges;
 import dev.aliencode.core.toca.usecase.DisposeTocaUseCase;
+import dev.aliencode.core.toca.usecase.HarvestTocaUseCase;
 import dev.aliencode.core.toca.usecase.ProvisionTocaUseCase;
 import dev.aliencode.core.toca.usecase.command.ProvisionTocaCommand;
 
 import static java.util.Objects.isNull;
 
 /**
- * Orquestrador de missões do M1: provisiona a Toca, abre uma sessão do agente com a tarefa,
- * transforma o que o agente faz em eventos da timeline e decide o fim da missão.
+ * Orquestrador de missões: provisiona a Toca, abre uma sessão do agente com a tarefa,
+ * transforma o que o agente faz em eventos da timeline, colhe a entrega e decide o fim da missão.
  * O modelo nunca decide transições de estado; quem decide é este orquestrador.
  *
  * <p>Cada missão roda num thread próprio do {@code missionExecutor}. A parada chega por
@@ -46,12 +52,15 @@ public class MissionConductor {
 
     static final String TOCA_STEP = "toca";
     static final String TASK_STEP = "t1";
+    static final String HARVEST_STEP = "toca.harvest";
     static final String DISPOSE_STEP = "toca.dispose";
 
     private final ProvisionTocaUseCase provisionToca;
+    private final HarvestTocaUseCase harvestToca;
     private final DisposeTocaUseCase disposeToca;
     private final AgentSessionPort agent;
-    private final MissionRepository missions;
+    private final DeliveryRepository deliveries;
+    private final MissionTransitions transitions;
     private final MissionEventHub events;
     private final MissionSettings settings;
     private final Clock clock;
@@ -61,18 +70,22 @@ public class MissionConductor {
 
     public MissionConductor(
             ProvisionTocaUseCase provisionToca,
+            HarvestTocaUseCase harvestToca,
             DisposeTocaUseCase disposeToca,
             AgentSessionPort agent,
-            MissionRepository missions,
+            DeliveryRepository deliveries,
+            MissionTransitions transitions,
             MissionEventHub events,
             MissionSettings settings,
             Clock clock,
             @Qualifier("missionExecutor") Executor executor
     ) {
         this.provisionToca = provisionToca;
+        this.harvestToca = harvestToca;
         this.disposeToca = disposeToca;
         this.agent = agent;
-        this.missions = missions;
+        this.deliveries = deliveries;
+        this.transitions = transitions;
         this.events = events;
         this.settings = settings;
         this.clock = clock;
@@ -211,6 +224,7 @@ public class MissionConductor {
 
             return this.finish(
                     executing,
+                    toca,
                     timeline,
                     outcome,
                     start
@@ -240,6 +254,7 @@ public class MissionConductor {
 
     private Mission finish(
             Mission mission,
+            Toca toca,
             TaskTimeline timeline,
             TaskOutcome outcome,
             Instant start
@@ -259,10 +274,72 @@ public class MissionConductor {
         this.events.publish(mission.id(), this.alien(type, TASK_STEP, payload));
 
         return switch (outcome.kind()) {
-            case COMPLETED -> this.transition(mission.completed(now));
+            case COMPLETED -> this.harvest(mission, toca);
             case STOPPED -> this.transition(mission.cancelled(now));
             case FAILED, TIMED_OUT -> this.transition(mission.failed(outcome.message(), now));
         };
+    }
+
+    /**
+     * Passo 6 (Colher): o patch sai da Toca antes de ela ser descartada e fica esperando o dev.
+     * Projeto novo ainda não tem para onde ser entregue: termina como antes.
+     */
+    private Mission harvest(
+            Mission mission,
+            Toca toca
+    ) {
+        if (!(mission.seed() instanceof Seed.ExistingRepositories(List<RepositorySeed> repositories))) {
+            return this.transition(mission.completed(this.clock.instant()));
+        }
+
+        RepositorySeed repository = repositories.getFirst();
+        Instant start = this.clock.instant();
+
+        this.events.publish(mission.id(), this.docker(EventType.STEP_STARTED, HARVEST_STEP, Map.of("title", "Colher entrega")));
+
+        try {
+            WorkspaceChanges changes = this.harvestToca.harvest(
+                    toca.id(),
+                    toca.workspaceDirs().getFirst(),
+                    mission.title()
+            );
+
+            Map<String, Object> payload = new LinkedHashMap<>();
+
+            payload.put("title", changes.isEmpty() ? "Colher entrega: nenhuma alteração" : "Colher entrega");
+            payload.put("files", changes.files().size());
+            payload.put("durationMs", this.elapsedMs(start));
+
+            this.events.publish(mission.id(), this.docker(EventType.STEP_COMPLETED, HARVEST_STEP, payload));
+
+            if (changes.isEmpty()) {
+                return this.transition(mission.completed(this.clock.instant()));
+            }
+
+            Delivery delivery = Delivery.pending(
+                    mission.id(),
+                    repository.name(),
+                    repository.path(),
+                    changes,
+                    this.clock.instant()
+            );
+
+            this.deliveries.save(delivery);
+            this.events.publish(mission.id(), DeliveryEvents.ready(delivery));
+
+            return this.transition(mission.awaitingReview());
+        } catch (RuntimeException e) {
+            Map<String, Object> payload = new LinkedHashMap<>();
+
+            payload.put("title", "Colher entrega");
+            payload.put("error", e.getMessage());
+            payload.put("durationMs", this.elapsedMs(start));
+
+            this.events.publish(mission.id(), this.docker(EventType.STEP_FAILED, HARVEST_STEP, payload));
+            log.warn("Missão {}: entrega não colhida: {}", mission.id(), e.getMessage(), e);
+
+            return this.transition(mission.failed("Não foi possível colher a entrega: " + e.getMessage(), this.clock.instant()));
+        }
     }
 
     private void disposeIfNeeded(Mission mission) {
@@ -288,18 +365,7 @@ public class MissionConductor {
     }
 
     private Mission transition(Mission mission) {
-        this.missions.save(mission);
-
-        Map<String, Object> payload = new LinkedHashMap<>();
-
-        payload.put("status", mission.status().name());
-        payload.put("tocaId", mission.hasToca() ? mission.tocaId().value() : null);
-        payload.put("reason", mission.failureReason());
-
-        this.events.publish(mission.id(), this.alien(EventType.MISSION_STATE, null, payload));
-        log.info("Missão {} → {}", mission.id(), mission.status());
-
-        return mission;
+        return this.transitions.record(mission);
     }
 
     private NewEvent taskStarted(Mission mission) {

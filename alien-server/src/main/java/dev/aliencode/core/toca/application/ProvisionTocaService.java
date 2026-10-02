@@ -23,6 +23,7 @@ import dev.aliencode.core.toca.domain.model.Seed;
 import dev.aliencode.core.toca.domain.model.Toca;
 import dev.aliencode.core.toca.domain.model.TocaEndpoint;
 import dev.aliencode.core.toca.domain.model.TocaId;
+import dev.aliencode.core.toca.domain.model.WorkspaceChanges;
 import dev.aliencode.core.toca.port.harness.AgentHarnessPort;
 import dev.aliencode.core.toca.port.repository.TocaRepository;
 import dev.aliencode.core.toca.port.sandbox.ExecResult;
@@ -193,6 +194,7 @@ public class ProvisionTocaService implements ProvisionTocaUseCase {
                 String target = WORKSPACE + "/" + repository.name();
 
                 this.sandbox.copyDirectory(toca.containerId(), snapshot, target);
+                this.markBase(toca, target);
 
                 dirs.add(target);
             } finally {
@@ -201,6 +203,15 @@ public class ProvisionTocaService implements ProvisionTocaUseCase {
         }
 
         return dirs;
+    }
+
+    /** O ponto de partida da entrega: tudo o que o agente commitar depois desta tag vira o patch. */
+    private void markBase(Toca toca, String target) {
+        ExecResult result = this.sandbox.exec(toca.containerId(), List.of("git", "-C", target, "tag", "--force", WorkspaceChanges.BASE_TAG), GIT_INIT_TIMEOUT);
+
+        if (!result.succeeded()) {
+            throw new IllegalStateException("Não foi possível marcar o commit base de " + target + " (o repositório tem ao menos um commit?): " + result.stderr().strip());
+        }
     }
 
     private List<String> seedNewProject(Toca toca, String name) {

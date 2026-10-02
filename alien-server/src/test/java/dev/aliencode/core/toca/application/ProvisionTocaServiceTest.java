@@ -84,6 +84,10 @@ class ProvisionTocaServiceTest {
         assertThat(toca.workspaceDirs()).containsExactly("/workspace/api", "/workspace/web");
         assertThat(toca.expiresAt()).isEqualTo(NOW.plus(Duration.ofMinutes(60)));
         assertThat(this.sandbox.copiedTo).containsExactly("/workspace/api", "/workspace/web");
+        assertThat(this.sandbox.executed).containsExactly(
+                List.of("git", "-C", "/workspace/api", "tag", "--force", "alien-base"),
+                List.of("git", "-C", "/workspace/web", "tag", "--force", "alien-base")
+        );
         assertThat(this.snapshots.discarded).hasSize(2);
         assertThat(this.harness.lastEndpoint.baseUrl().toString()).isEqualTo("http://127.0.0.1:40001");
         assertThat(this.tocas.findById(toca.id())).contains(toca);
@@ -145,6 +149,17 @@ class ProvisionTocaServiceTest {
 
         assertThatThrownBy(() -> this.service.provision(new ProvisionTocaCommand(null, new Seed.NewProject("demo"))))
                 .hasMessageContaining("permissão negada");
+        assertThat(this.sandbox.removed).hasSize(1);
+    }
+
+    @Test
+    void repositorioSemCommitNaoMarcaABaseEFalhaAToca() throws IOException {
+        this.sandbox.execResult = new ExecResult(128, "", "fatal: Failed to resolve 'HEAD' as a valid ref.");
+
+        Seed seed = new Seed.ExistingRepositories(List.of(this.repo("vazio")));
+
+        assertThatThrownBy(() -> this.service.provision(new ProvisionTocaCommand("m-42", seed)))
+                .hasMessageContaining("commit base");
         assertThat(this.sandbox.removed).hasSize(1);
     }
 

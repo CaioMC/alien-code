@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 
 import dev.aliencode.core.toca.domain.model.RepositorySeed;
 import dev.aliencode.core.toca.domain.model.Toca;
@@ -21,6 +22,7 @@ import dev.aliencode.core.toca.port.sandbox.SandboxPort;
 import dev.aliencode.core.toca.port.sandbox.SandboxRequest;
 import dev.aliencode.core.toca.port.workspace.WorkspaceSnapshotPort;
 
+import static java.util.Objects.isNull;
 import static java.util.Objects.nonNull;
 
 /** Dublês simples das portas da Toca, com registro do que foi chamado. */
@@ -36,6 +38,8 @@ final class TocaTestDoubles {
         final List<String> removed = new ArrayList<>();
         final List<ManagedSandbox> managed = new ArrayList<>();
         ExecResult execResult = new ExecResult(0, "", "");
+        /** Resposta por comando; quando nulo, todo comando devolve {@link #execResult}. */
+        Function<List<String>, ExecResult> onExec;
         RuntimeException failOnCopy;
 
         @Override
@@ -56,7 +60,7 @@ final class TocaTestDoubles {
         @Override
         public ExecResult exec(String containerId, List<String> command, Duration timeout) {
             this.executed.add(command);
-            return this.execResult;
+            return isNull(this.onExec) ? this.execResult : this.onExec.apply(command);
         }
 
         @Override

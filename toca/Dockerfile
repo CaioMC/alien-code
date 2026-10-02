@@ -17,6 +17,9 @@ RUN userdel -r ubuntu && useradd -m -u 1000 -s /bin/bash alien \
  && mkdir -p /workspace && chown alien:alien /workspace
 
 COPY --chmod=755 toca-entrypoint.sh /usr/local/bin/toca-entrypoint.sh
+# a pasta antes do COPY: o --chmod=644 também valeria para ela, e pasta sem "x" não se atravessa
+RUN install -d -m 755 /etc/alien
+COPY --chmod=644 toca-gitignore /etc/alien/gitignore
 
 USER alien
 WORKDIR /workspace

@@ -1,6 +1,6 @@
 package dev.aliencode.core.mission.domain.model;
 
-/** Tipos de evento da timeline usados no M1 (especificação, seção 8.2). */
+/** Tipos de evento da timeline (especificação, seção 8.2). */
 public enum EventType {
     MISSION_CREATED("mission.created"),
     MISSION_STATE("mission.state"),
@@ -14,7 +14,10 @@ public enum EventType {
     TERMINAL_OUTPUT("terminal.output"),
     FILE_CHANGED("file.changed"),
     DIFF_UPDATED("diff.updated"),
-    BUDGET_UPDATED("budget.updated");
+    BUDGET_UPDATED("budget.updated"),
+    DELIVERY_READY("delivery.ready"),
+    DELIVERY_APPLIED("delivery.applied"),
+    DELIVERY_REJECTED("delivery.rejected");
 
     private final String wireName;
 

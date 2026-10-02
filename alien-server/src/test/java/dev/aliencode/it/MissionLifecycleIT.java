@@ -29,6 +29,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.dockerjava.api.DockerClient;
 import com.github.dockerjava.api.model.Container;
 
+import dev.aliencode.adapters.mission.web.response.DeliveryResponse;
 import dev.aliencode.adapters.mission.web.response.MissionResponse;
 
 import static java.util.Objects.isNull;
@@ -38,9 +39,10 @@ import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
- * Critério de pronto do M1: uma missão com 1 repositório e 1 tarefa roda numa Toca real, com o
- * opencode real; o SSE do opencode vira eventos da timeline, entregues ao vivo por WebSocket, com
- * reconexão por lastSeq; o Parar aborta a sessão. O modelo é o {@link ScriptedLlmServer}.
+ * Critério de pronto do M1 e da entrega do M2: uma missão com 1 repositório e 1 tarefa roda numa
+ * Toca real, com o opencode real; o SSE do opencode vira eventos da timeline, entregues ao vivo por
+ * WebSocket, com reconexão por lastSeq; o Parar aborta a sessão; o patch colhido, aprovado, vira
+ * uma branch local. O modelo é o {@link ScriptedLlmServer}.
  *
  * <p>Precisa de Docker, da imagem alien/toca:0.1 e da rede alien-net ({@code docker compose up -d}).
  */
@@ -118,14 +120,15 @@ class MissionLifecycleIT {
                 "step.completed"
         );
 
-        assertThat(timeline.states()).containsSubsequence("PROVISIONING", "EXECUTING", "COMPLETED");
+        assertThat(timeline.states()).containsSubsequence("PROVISIONING", "EXECUTING", "AWAITING_REVIEW");
+        assertThat(timeline.first("delivery.ready").path("payload").path("files").path(0).path("path").asText()).isEqualTo("calc.py");
         assertThat(timeline.first("terminal.output").path("payload").path("output").asText()).isEqualTo("5\n");
         assertThat(timeline.first("file.changed").path("payload").path("patch").asText()).contains("+    return a + b");
         assertThat(timeline.seqs()).isEqualTo(java.util.stream.LongStream.rangeClosed(1, timeline.size()).boxed().toList());
 
         MissionResponse snapshot = this.rest.getForObject("/api/missions/" + mission.id(), MissionResponse.class);
 
-        assertThat(snapshot.status()).isEqualTo("COMPLETED");
+        assertThat(snapshot.status()).isEqualTo("AWAITING_REVIEW");
         assertThat(snapshot.lastSeq()).isEqualTo(timeline.size());
         assertThat(this.tocaContainers(mission.id())).isEmpty();
 
@@ -137,6 +140,31 @@ class MissionLifecycleIT {
 
         timeline.close();
         reconnected.close();
+    }
+
+    @Test
+    void entregaAprovadaViraBranchSemTocarNaBranchAtual() throws Exception {
+        MissionResponse mission = this.start("Corrija a função soma em calc.py");
+
+        await().atMost(MISSION_TIMEOUT).until(() -> "AWAITING_REVIEW".equals(this.rest.getForObject("/api/missions/" + mission.id(), MissionResponse.class).status()));
+
+        DeliveryResponse pending = this.rest.getForObject("/api/missions/" + mission.id() + "/delivery", DeliveryResponse.class);
+
+        assertThat(pending.status()).isEqualTo("PENDING");
+        assertThat(pending.patch()).contains("+    return a + b");
+
+        DeliveryResponse applied = this.rest.postForObject("/api/missions/" + mission.id() + "/delivery/approve", null, DeliveryResponse.class);
+        Path repo = root.resolve("calc");
+
+        assertThat(applied.status()).isEqualTo("APPLIED");
+        assertThat(output("git", "-C", repo.toString(), "show", applied.branch() + ":calc.py")).contains("return a + b");
+        assertThat(output("git", "-C", repo.toString(), "rev-parse", applied.branch())).isEqualTo(applied.headCommit());
+        assertThat(output("git", "-C", repo.toString(), "branch", "--show-current")).isEqualTo("main");
+        assertThat(Files.readString(repo.resolve("calc.py"))).contains("return a - b");
+        assertThat(this.rest.getForObject("/api/missions/" + mission.id(), MissionResponse.class).status()).isEqualTo("COMPLETED");
+
+        // a Toca vai embora logo depois da colheita, sem esperar a revisão
+        await().atMost(Duration.ofSeconds(30)).until(() -> this.tocaContainers(mission.id()).isEmpty());
     }
 
     @Test

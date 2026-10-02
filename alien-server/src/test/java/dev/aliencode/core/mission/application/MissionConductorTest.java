@@ -18,22 +18,30 @@ import org.junit.jupiter.api.Test;
 
 import dev.aliencode.core.mission.application.MissionTestDoubles.FakeAgent;
 import dev.aliencode.core.mission.application.MissionTestDoubles.FakeDisposeToca;
+import dev.aliencode.core.mission.application.MissionTestDoubles.FakeHarvestToca;
 import dev.aliencode.core.mission.application.MissionTestDoubles.FakeProvisionToca;
+import dev.aliencode.core.mission.application.MissionTestDoubles.InMemoryDeliveries;
 import dev.aliencode.core.mission.application.MissionTestDoubles.InMemoryEventStore;
 import dev.aliencode.core.mission.application.MissionTestDoubles.InMemoryMissions;
 import dev.aliencode.core.mission.domain.model.AgentModel;
 import dev.aliencode.core.mission.domain.model.AlienEvent;
+import dev.aliencode.core.mission.domain.model.Delivery;
+import dev.aliencode.core.mission.domain.model.DeliveryStatus;
 import dev.aliencode.core.mission.domain.model.EventType;
 import dev.aliencode.core.mission.domain.model.Mission;
 import dev.aliencode.core.mission.domain.model.MissionId;
 import dev.aliencode.core.mission.domain.model.MissionStatus;
 import dev.aliencode.core.mission.port.agent.AgentEvent;
+import dev.aliencode.core.toca.domain.model.ChangedFile;
 import dev.aliencode.core.toca.domain.model.RepositorySeed;
 import dev.aliencode.core.toca.domain.model.Seed;
 import dev.aliencode.core.toca.domain.model.Toca;
+import dev.aliencode.core.toca.domain.model.WorkspaceChanges;
 import dev.aliencode.core.toca.usecase.command.ProvisionTocaCommand;
 
+import static dev.aliencode.core.mission.application.MissionTestDoubles.BASE_COMMIT;
 import static dev.aliencode.core.mission.application.MissionTestDoubles.NOW;
+import static dev.aliencode.core.mission.application.MissionTestDoubles.PATCH;
 import static dev.aliencode.core.mission.application.MissionTestDoubles.SESSION;
 import static dev.aliencode.core.mission.application.MissionTestDoubles.WORKSPACE;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -49,7 +57,9 @@ class MissionConductorTest {
 
     private final FakeAgent agent = new FakeAgent();
     private final FakeProvisionToca provision = new FakeProvisionToca();
+    private final FakeHarvestToca harvest = new FakeHarvestToca();
     private final FakeDisposeToca dispose = new FakeDisposeToca();
+    private final InMemoryDeliveries deliveries = new InMemoryDeliveries();
 
     private final ExecutorService background = Executors.newSingleThreadExecutor();
 
@@ -183,9 +193,11 @@ class MissionConductorTest {
 
         MissionConductor conductor = new MissionConductor(
                 slow,
+                this.harvest,
                 this.dispose,
                 this.agent,
-                this.missions,
+                this.deliveries,
+                new MissionTransitions(this.missions, this.hub),
                 this.hub,
                 new MissionSettings(MODEL, Duration.ofSeconds(30), false),
                 Clock.fixed(NOW, ZoneOffset.UTC),
@@ -236,6 +248,83 @@ class MissionConductorTest {
         assertThat(this.dispose.disposed).isEmpty();
     }
 
+    @Test
+    void agenteQueAlteraArquivosDeixaAEntregaEsperandoRevisao() {
+        this.agent.script.add(new AgentEvent.SessionIdle(SESSION));
+        this.harvest.changes = new WorkspaceChanges(BASE_COMMIT, PATCH, List.of(new ChangedFile("calc.py", 1, 1)));
+
+        Mission mission = this.conduct(this.conductor(Runnable::run, Duration.ofSeconds(5), false));
+
+        assertThat(this.status(mission.id())).isEqualTo(MissionStatus.AWAITING_REVIEW);
+        assertThat(this.store.states()).endsWith("EXECUTING", "AWAITING_REVIEW");
+        assertThat(this.harvest.harvested).containsExactly(WORKSPACE);
+        assertThat(this.dispose.disposed).hasSize(1);
+
+        Delivery delivery = this.deliveries.findByMissionId(mission.id()).orElseThrow();
+
+        assertThat(delivery.status()).isEqualTo(DeliveryStatus.PENDING);
+        assertThat(delivery.branch()).isEqualTo("alien/" + mission.id().value());
+        assertThat(delivery.repositoryPath()).isEqualTo(Path.of("/tmp/calc"));
+        assertThat(delivery.patch()).isEqualTo(PATCH);
+
+        AlienEvent ready = this.store.ofType(EventType.DELIVERY_READY).getFirst();
+
+        assertThat(ready.payload()).containsEntry("additions", 1).containsEntry("deletions", 1).doesNotContainKey("patch");
+        assertThat(this.store.types()).containsSubsequence(
+                "step.completed",
+                "step.started",
+                "step.completed",
+                "delivery.ready",
+                "mission.state",
+                "step.completed"
+        );
+    }
+
+    @Test
+    void agenteSemAlteracoesConcluiSemEntrega() {
+        this.agent.script.add(new AgentEvent.SessionIdle(SESSION));
+
+        Mission mission = this.conduct(this.conductor(Runnable::run, Duration.ofSeconds(5), false));
+
+        assertThat(this.status(mission.id())).isEqualTo(MissionStatus.COMPLETED);
+        assertThat(this.deliveries.findByMissionId(mission.id())).isEmpty();
+        assertThat(this.store.ofType(EventType.DELIVERY_READY)).isEmpty();
+    }
+
+    @Test
+    void falhaAoColherFalhaAMissaoEDescartaAToca() {
+        this.agent.script.add(new AgentEvent.SessionIdle(SESSION));
+        this.harvest.failure = new IllegalStateException("git format-patch falhou na Toca");
+
+        Mission mission = this.conduct(this.conductor(Runnable::run, Duration.ofSeconds(5), false));
+        Mission failed = this.missions.findById(mission.id()).orElseThrow();
+
+        assertThat(failed.status()).isEqualTo(MissionStatus.FAILED);
+        assertThat(failed.failureReason()).contains("git format-patch falhou");
+        assertThat(this.store.ofType(EventType.STEP_FAILED).getFirst().stepId()).isEqualTo(MissionConductor.HARVEST_STEP);
+        assertThat(this.dispose.disposed).hasSize(1);
+    }
+
+    @Test
+    void projetoNovoNaoTemEntrega() {
+        this.agent.script.add(new AgentEvent.SessionIdle(SESSION));
+
+        Mission mission = Mission.create(
+                MissionId.newId(),
+                null,
+                "Crie um hello world",
+                new Seed.NewProject("hello"),
+                MODEL,
+                NOW
+        );
+
+        this.missions.save(mission);
+        this.conductor(Runnable::run, Duration.ofSeconds(5), false).conduct(mission);
+
+        assertThat(this.status(mission.id())).isEqualTo(MissionStatus.COMPLETED);
+        assertThat(this.harvest.harvested).isEmpty();
+    }
+
     private MissionConductor conductor(
             Executor executor,
             Duration taskTimeout,
@@ -243,9 +332,11 @@ class MissionConductorTest {
     ) {
         return new MissionConductor(
                 this.provision,
+                this.harvest,
                 this.dispose,
                 this.agent,
-                this.missions,
+                this.deliveries,
+                new MissionTransitions(this.missions, this.hub),
                 this.hub,
                 new MissionSettings(MODEL, taskTimeout, keepToca),
                 Clock.fixed(NOW, ZoneOffset.UTC),
