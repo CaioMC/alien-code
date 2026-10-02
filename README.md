@@ -287,6 +287,5 @@ o tradutor guarda o tipo de cada parte.
 | ✅ | **M0 · Esqueleto** | Imagem da Toca com opencode; o Alien Server cria, semeia, vigia e destrói Tocas com limites de CPU, memória e processos |
 | ✅ | **M1 · Timeline ao vivo** | Missão com 1 repo e 1 tarefa; eventos do opencode → Event Store → WebSocket → UI, com replay por `lastSeq` e botão Parar |
 | ⏳ | **M2 · Entrega segura** | Rede bloqueada + proxy de pacotes, aprovações na UI, blobs para saídas grandes |
-| ⏳ | **M3 · Grafo** | Grafo de dependências local ([graphify](https://github.com/Graphify-Labs/graphify)) para entender o código e ordenar tarefas |
-| ⏳ | **M4 · Multi-repo + DAG** | Várias tarefas e repositórios, executadas em ordem de dependência |
-| ⏳ | **M5 · AI-DLC completo** | Fluxo completo com perfis e portões de aprovação ([aidlc-workflows](https://github.com/awslabs/aidlc-workflows)) |
+| ⏳ | **M3 · Grafo** | Grafo de dependências local ([graphify](https://github.com/Graphify-Labs/graphify)) consultado pelo agente via MCP; impacto da mudança, testes afetados e diff estrutural da entrega |
+| ⏳ | **M4 · AI-DLC completo** | Fluxo completo com perfis e portões de aprovação ([aidlc-workflows](https://github.com/awslabs/aidlc-workflows)) |
