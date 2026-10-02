@@ -7,26 +7,7 @@
 # ════════════════════════════════════════════════════════════════════════════════
 
 alien:
-
-  # ── 1. Modelo ─────────────────────────────────────────────────────────────────
-  # O opencode, dentro da Toca, conversa com qualquer provedor compatível com a API
-  # da OpenAI (Ollama, OpenRouter, LiteLLM, vLLM, OpenAI...).
-  #
-  #   default    modelo das missões, no formato <provedor>/<modelo>
-  #   providers  um bloco por provedor; o nome do bloco é o <provedor> acima
-  #
-  # Para usar outro provedor, acrescente um bloco e aponte o default para ele:
-  #
-  #   alien:
-  #     model:
-    #       default: openrouter/qwen/qwen3-coder
-    #       providers:
-  #         openrouter:
-  #           name: OpenRouter
-  #           base-url: https://openrouter.ai/api/v1
-  #           api-key: ${OPENROUTER_API_KEY}       # chave sempre do ambiente, nunca aqui
-  #           models:
-  #             - qwen/qwen3-coder
+  # ── 1. Modelos ───────────────────────────────────────────────────────────────
   model:
     default: ollama/qwen3-8b-t10
     # Tempo máximo de uma chamada ao modelo. Na CPU, o system prompt do opencode
