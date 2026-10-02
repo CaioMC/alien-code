@@ -4,9 +4,11 @@ const LABELS: Record<MissionStatus, string> = {
   CREATED: 'CRIADA',
   PROVISIONING: 'PROVISIONANDO',
   EXECUTING: 'EXECUTANDO',
+  AWAITING_REVIEW: 'AGUARDANDO REVISÃO',
   COMPLETED: 'CONCLUÍDA',
   FAILED: 'FALHOU',
   CANCELLED: 'CANCELADA',
+  REJECTED: 'DESCARTADA',
 }
 
 export function StatusBadge({ status }: { status?: MissionStatus }) {

@@ -3,7 +3,9 @@ import { useEffect, useState } from 'react'
 import { stopMission } from '../api/missionsApi'
 import { isActive } from '../domain/events'
 import { useMissionTimeline } from '../hooks/useMissionTimeline'
+import { DeliveryCard } from './DeliveryCard'
 import { DiffPanel } from './DiffPanel'
+import { PatchPanel } from './PatchPanel'
 import { StatusBadge } from './StatusBadge'
 import { TerminalPanel } from './TerminalPanel'
 import { Timeline } from './Timeline'
@@ -13,7 +15,7 @@ interface Props {
   onChanged: () => void
 }
 
-type Tab = 'terminal' | 'diff'
+type Tab = 'terminal' | 'diff' | 'patch'
 
 export function MissionView({ missionId, onChanged }: Props) {
   const { timeline, connection, stop } = useMissionTimeline(missionId)
@@ -84,6 +86,14 @@ export function MissionView({ missionId, onChanged }: Props) {
         <div className="timeline-column">
           {timeline.prompt && <blockquote className="prompt">{timeline.prompt}</blockquote>}
           <Timeline timeline={timeline} />
+          {timeline.delivery && (
+            <DeliveryCard
+              missionId={missionId}
+              status={timeline.status}
+              delivery={timeline.delivery}
+              onShowPatch={() => setTab('patch')}
+            />
+          )}
         </div>
         <div className="panel-column">
           <nav className="tabs">
@@ -93,8 +103,15 @@ export function MissionView({ missionId, onChanged }: Props) {
             <button className={tab === 'diff' ? 'active' : ''} onClick={() => setTab('diff')}>
               Diff {files.length > 0 && <span className="count">{files.length}</span>}
             </button>
+            {timeline.delivery && (
+              <button className={tab === 'patch' ? 'active' : ''} onClick={() => setTab('patch')}>
+                Entrega
+              </button>
+            )}
           </nav>
-          {tab === 'terminal' ? <TerminalPanel entries={timeline.terminal} /> : <DiffPanel files={files} />}
+          {tab === 'terminal' && <TerminalPanel entries={timeline.terminal} />}
+          {tab === 'diff' && <DiffPanel files={files} />}
+          {tab === 'patch' && <PatchPanel missionId={missionId} version={timeline.delivery?.status ?? ''} />}
         </div>
       </div>
     </section>

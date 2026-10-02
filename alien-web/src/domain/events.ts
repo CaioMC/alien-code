@@ -25,8 +25,19 @@ export type EventType =
   | 'file.changed'
   | 'diff.updated'
   | 'budget.updated'
+  | 'delivery.ready'
+  | 'delivery.applied'
+  | 'delivery.rejected'
 
-export type MissionStatus = 'CREATED' | 'PROVISIONING' | 'EXECUTING' | 'COMPLETED' | 'FAILED' | 'CANCELLED'
+export type MissionStatus =
+  | 'CREATED'
+  | 'PROVISIONING'
+  | 'EXECUTING'
+  | 'AWAITING_REVIEW'
+  | 'COMPLETED'
+  | 'FAILED'
+  | 'CANCELLED'
+  | 'REJECTED'
 
 export const ACTIVE_STATUSES: readonly MissionStatus[] = ['CREATED', 'PROVISIONING', 'EXECUTING']
 
@@ -46,4 +57,29 @@ export interface MissionSnapshot {
   finishedAt?: string
   failureReason?: string
   lastSeq?: number
+}
+
+export type DeliveryStatus = 'PENDING' | 'APPLIED' | 'REJECTED'
+
+export interface ChangedFile {
+  path: string
+  additions: number
+  deletions: number
+}
+
+/** Resposta de GET /api/missions/{id}/delivery: o patch completo que o agente produziu. */
+export interface Delivery {
+  missionId: string
+  status: DeliveryStatus
+  repository: string
+  repositoryPath: string
+  baseCommit: string
+  branch: string
+  headCommit?: string
+  additions: number
+  deletions: number
+  files: ChangedFile[]
+  patch: string
+  createdAt: string
+  resolvedAt?: string
 }

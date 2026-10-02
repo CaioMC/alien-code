@@ -1,4 +1,4 @@
-import type { AlienEvent, MissionStatus } from './events'
+import type { AlienEvent, ChangedFile, DeliveryStatus, MissionStatus } from './events'
 
 /**
  * A timeline da missão, montada só a partir dos eventos, em ordem de seq.
@@ -45,6 +45,17 @@ export interface Budget {
   totalTokens: number
 }
 
+/** Resumo da entrega que chega pelos eventos; o patch completo vem de GET .../delivery. */
+export interface DeliverySummary {
+  status: DeliveryStatus
+  branch: string
+  files: ChangedFile[]
+  additions: number
+  deletions: number
+  headCommit?: string
+  repositoryPath?: string
+}
+
 export interface TimelineState {
   lastSeq: number
   status?: MissionStatus
@@ -61,6 +72,7 @@ export interface TimelineState {
   terminal: TerminalEntry[]
   files: Record<string, FileDiff>
   budget?: Budget
+  delivery?: DeliverySummary
 }
 
 export const emptyTimeline: TimelineState = {
@@ -186,6 +198,38 @@ function reduce(state: TimelineState, event: AlienEvent): TimelineState {
           totalTokens: num(p.totalTokens) ?? 0,
         },
       }
+
+    case 'delivery.ready': {
+      const delivery: DeliverySummary = {
+        status: 'PENDING',
+        branch: str(p.branch) ?? '',
+        files: Array.isArray(p.files) ? (p.files as ChangedFile[]) : [],
+        additions: num(p.additions) ?? 0,
+        deletions: num(p.deletions) ?? 0,
+      }
+
+      return { ...upsert(state, event, 'step', { title: str(p.title), status: 'running' }), delivery }
+    }
+
+    case 'delivery.applied':
+    case 'delivery.rejected': {
+      const applied = event.type === 'delivery.applied'
+      const next = upsert(state, event, 'step', { title: str(p.title), status: applied ? 'done' : 'cancelled' })
+
+      if (!state.delivery) {
+        return next
+      }
+
+      return {
+        ...next,
+        delivery: {
+          ...state.delivery,
+          status: applied ? 'APPLIED' : 'REJECTED',
+          headCommit: str(p.headCommit),
+          repositoryPath: str(p.repositoryPath),
+        },
+      }
+    }
 
     default:
       return state

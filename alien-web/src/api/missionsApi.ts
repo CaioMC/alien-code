@@ -1,4 +1,4 @@
-import type { MissionSnapshot } from '../domain/events'
+import type { Delivery, MissionSnapshot } from '../domain/events'
 
 export interface StartMissionRequest {
   title?: string
@@ -35,6 +35,19 @@ export async function getMission(id: string): Promise<MissionSnapshot> {
 
 export async function stopMission(id: string): Promise<MissionSnapshot> {
   return call<MissionSnapshot>(`/api/missions/${encodeURIComponent(id)}/stop`, { method: 'POST' })
+}
+
+export async function getDelivery(id: string): Promise<Delivery> {
+  return call<Delivery>(`/api/missions/${encodeURIComponent(id)}/delivery`)
+}
+
+/** Aplica o patch numa branch alien/<missão> do repositório original. */
+export async function approveDelivery(id: string): Promise<Delivery> {
+  return call<Delivery>(`/api/missions/${encodeURIComponent(id)}/delivery/approve`, { method: 'POST' })
+}
+
+export async function rejectDelivery(id: string): Promise<Delivery> {
+  return call<Delivery>(`/api/missions/${encodeURIComponent(id)}/delivery/reject`, { method: 'POST' })
 }
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {

@@ -30,7 +30,7 @@ export function DiffPanel({ files }: { files: FileDiff[] }) {
   )
 }
 
-function lineClass(line: string): string {
+export function lineClass(line: string): string {
   if (line.startsWith('+++') || line.startsWith('---')) {
     return 'meta'
   }
