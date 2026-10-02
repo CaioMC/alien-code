@@ -1,5 +1,6 @@
 package dev.aliencode.adapters.toca.docker;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
@@ -143,14 +144,14 @@ public class DockerSandboxAdapter implements SandboxPort {
                 .withAttachStderr(true)
                 .exec();
 
-        StringBuilder stdout = new StringBuilder();
-        StringBuilder stderr = new StringBuilder();
+        // bytes, e não String por frame: um caractere UTF-8 pode vir dividido entre dois frames
+        ByteArrayOutputStream stdout = new ByteArrayOutputStream();
+        ByteArrayOutputStream stderr = new ByteArrayOutputStream();
 
         try (ResultCallback.Adapter<Frame> callback = new ResultCallback.Adapter<>() {
             @Override
             public void onNext(Frame frame) {
-                String chunk = new String(frame.getPayload(), StandardCharsets.UTF_8);
-                (frame.getStreamType() == StreamType.STDERR ? stderr : stdout).append(chunk);
+                (frame.getStreamType() == StreamType.STDERR ? stderr : stdout).writeBytes(frame.getPayload());
             }
         }) {
             this.docker.execStartCmd(created.getId()).exec(callback);
@@ -166,7 +167,7 @@ public class DockerSandboxAdapter implements SandboxPort {
         }
 
         Long exitCode = this.docker.inspectExecCmd(created.getId()).exec().getExitCodeLong();
-        return new ExecResult(isNull(exitCode) ? -1 : exitCode.intValue(), stdout.toString(), stderr.toString());
+        return new ExecResult(isNull(exitCode) ? -1 : exitCode.intValue(), stdout.toString(StandardCharsets.UTF_8), stderr.toString(StandardCharsets.UTF_8));
     }
 
     @Override
